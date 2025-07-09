@@ -55,11 +55,6 @@ def load_and_preprocess_data(json_data):
 
 
 # Get tick range for a specific round
-def get_round_tick_range(clean_dfs, round_num):
-    round_data = clean_dfs["rounds"].loc[round_num]
-    start_tick = round_data["start_tick"]
-    end_tick = round_data["end_tick"]
-    return start_tick, end_tick
 
 
 # Home page for file upload
@@ -179,12 +174,12 @@ def location_page():
     st.info(round_result)
 
     # Get tick range for selected round
-    _, end_tick = get_round_tick_range(clean_dfs, selected_round)
 
     round_dfs = {
         k: v[v.index == selected_round] if isinstance(v, pd.DataFrame) else v
         for k, v in transformed_data.items()
     }
+    end_tick = round_dfs["player_locations"].tick.max()
 
     # Create sidebar for controls
     st.sidebar.header("Visualization Controls")
@@ -195,7 +190,7 @@ def location_page():
         "Max Tick",
         min_value=0,
         max_value=int(end_tick),
-        value=end_tick // 2,
+        value=(end_tick) // 2,
         help="Show events from tick 0 up to this tick value",
     )
 
@@ -225,31 +220,26 @@ def location_page():
 
     st.subheader(f"Game Actions - Round {selected_round}")
 
-    # Update visualization button
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        update_button = st.button("Update Visualization", use_container_width=True)
-
     # Update visualization if button clicked or parameters changed
-    if update_button or not st.session_state.visualization_updated:
-        fig, _ = plot_actions_by_max_tick(
-            round_dfs,
-            max_tick,
-            show_loc,
-            show_flash,
-            show_kills,
-            show_grenades,
-            flash_alpha,
-            kill_alpha,
-            grenade_alpha,
-            flash_size,
-            kill_size,
-            grenade_size,
-            show_lines,
-            transformed_data,
-        )
-        st.pyplot(fig, use_container_width=True)
-        st.session_state.visualization_updated = True
+    fig = plot_actions_by_max_tick(
+        round_dfs,
+        max_tick,
+        show_loc,
+        show_flash,
+        show_kills,
+        show_grenades,
+        flash_alpha,
+        kill_alpha,
+        grenade_alpha,
+        flash_size,
+        kill_size,
+        grenade_size,
+        show_lines,
+        transformed_data,
+        fig_height=1600,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    # st.session_state.visualization_updated = True
 
     # Show statistics
     with st.expander("Round Statistics", expanded=False):
