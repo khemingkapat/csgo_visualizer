@@ -1,7 +1,5 @@
 import streamlit as st
 import matplotlib.pyplot as plt
-import os
-from matplotlib.figure import Figure
 import json
 import pandas as pd
 from .symbols import *
@@ -9,10 +7,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 import numpy as np
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from PIL import Image
-import requests
-from io import BytesIO
 
 
 def upload_and_parse_json(preview_limit=10):
@@ -60,377 +55,400 @@ def upload_and_parse_json(preview_limit=10):
         return None
 
 
-def plot_map(map_name, fig_size=(10, 10), image_dim=1024):
+def plot_map(map_name, default_img_dim=1024):
+    map_image_path = f".awpy/maps/{map_name}.png"
+
+    fig = go.Figure()
+    image_height, image_width = default_img_dim, default_img_dim
+
+    image = Image.open(map_image_path)
+    image_width, image_height = image.size  # Get actual pixel dimensions
+
+    fig.add_layout_image(
+        dict(
+            source=image,  # Directly pass the PIL Image object
+            xref="x",  # Reference x-axis data coordinates
+            yref="y",  # Reference y-axis data coordinates
+            x=0,  # X-coordinate of the image's left edge (assuming map starts at 0)
+            y=image_height,  # Y-coordinate of the image's top edge (max y-value for top)
+            sizex=image_width,  # Width of the image in data units (use actual image width)
+            sizey=image_height,  # Height of the image in data units (use actual image height)
+            sizing="stretch",  # Stretch image to fit the defined size
+            opacity=1.0,  # Full opacity for the map
+            layer="below",  # Crucial: Ensures the image is drawn behind data traces
+        )
+    )
+
+    return fig
+
+
+def create_plotly_actions_plot(
+    round_dfs,
+    max_tick,
+    show_loc=True,
+    show_flash=True,
+    show_kills=True,
+    show_grenades=True,
+    flash_alpha=0.7,
+    kill_alpha=0.7,
+    grenade_alpha=0.7,
+    flash_size=10,
+    kill_size=10,
+    grenade_size=10,
+    show_lines=True,
+    map_name="de_dust2",
+    fig_height=800,
+):
     """
-    Create a matplotlib figure with a CS:GO map as background for plotting.
+    Create a Plotly figure with CS:GO game actions filtered by max tick.
+    This function creates a dynamic plot that can be updated without full reload.
 
     Parameters:
     -----------
+    round_dfs : dict
+        Dictionary containing DataFrames for different game actions
+    max_tick : int
+        Maximum tick value to filter actions
+    show_* : bool
+        Flags to control visibility of different action types
+    *_alpha : float
+        Transparency values for different action types
+    *_size : int
+        Size values for different action types
+    show_lines : bool
+        Whether to show connection lines between actions
+    transformed_data : dict
+        Additional data including map information
     map_name : str
-        Name of the map (without file extension)
-    fig_size : tuple
-        Figure size as (width, height) in inches
-    image_dim : int
-        Dimension of the map image (assumed square)
+        Name of the map for background
 
     Returns:
     --------
-    fig : matplotlib.figure.Figure
-        The figure with the map as background
-    ax : matplotlib.axes.Axes
-        The axes for adding additional plots
+    fig : plotly.graph_objects.Figure
+        Interactive Plotly figure
     """
-    # Create a new Figure and Axes
-    fig = Figure(figsize=fig_size)
-    ax = fig.add_subplot(111)
 
-    # Construct the path to the map image
-    map_path = f".awpy/maps/{map_name}.png"
+    # Create the main figure
+    fig = go.Figure()
 
-    # Check if the file exists
-    if not os.path.exists(map_path):
-        # If the file doesn't exist, create a placeholder
-        ax.text(
-            0.5,
-            0.5,
-            f"Map not found: {map_name}",
-            ha="center",
-            va="center",
-            transform=ax.transAxes,
+    # Set up the plot dimensions (CS:GO maps are typically 1024x1024)
+    plot_width, plot_height = 1024, 1024
+
+    # Add map background if available
+    fig = plot_map(map_name)
+
+    # Filter data by tick range
+    min_tick = 0
+    filtered_data = filter_data_by_tick(round_dfs, min_tick, max_tick)
+
+    # Add player locations
+    if show_loc and len(filtered_data["locations"]) > 0:
+        add_player_actions(
+            fig,
+            filtered_data["locations"],
+            gradient_by="tick",
+            color_by="side",
+            color_dict=side_color,
+            legendgroup="Locations",
         )
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
+
+    # Add flashes
+    if show_flash and len(filtered_data["flashes"]) > 0:
+        add_player_actions(
+            fig,
+            filtered_data["flashes"],
+            size=flash_size,
+            alpha=flash_alpha,
+            gradient_by="tick",
+            color_by="side",
+            color_dict=side_color,
+            marker_by="status",
+            marker_dict=flash_marker,
+            legendgroup="Flashes",
+        )
+
+        if show_lines and len(filtered_data["flash_lines"]) > 0:
+            add_connection_lines(
+                fig,
+                filtered_data["flash_lines"],
+                st1="attacker",
+                st2="player",
+                gradient_by="tick",
+            )
+    # Add kills
+    if show_kills and len(filtered_data["kills"]) > 0:
+        add_player_actions(
+            fig,
+            filtered_data["kills"],
+            size=kill_size,
+            alpha=kill_alpha,
+            gradient_by="tick",
+            color_by="side",
+            color_dict=side_color,
+            marker_by="status",
+            marker_dict=kill_marker,
+            legendgroup="Kills",
+        )
+
+        if show_lines and len(filtered_data["kill_lines"]) > 0:
+            add_connection_lines(
+                fig,
+                filtered_data["kill_lines"],
+                st1="attacker",
+                st2="victim",
+                gradient_by="tick",
+            )
+
+    # Add grenades
+    if show_grenades and len(filtered_data["grenades"]) > 0:
+        add_player_actions(
+            fig,
+            filtered_data["grenades"],
+            size=grenade_size,
+            alpha=grenade_alpha,
+            gradient_by="throw_tick",
+            color_by="side",
+            color_dict=side_color,
+            marker_by="status",
+            marker_dict=grenade_marker,
+            legendgroup="Grenades",
+        )
+
+        if show_lines and len(filtered_data["grenade_lines"]) > 0:
+            add_connection_lines(
+                fig,
+                filtered_data["grenade_lines"],
+                st1="thrower",
+                st2="grenade",
+                gradient_by="throw_tick",
+            )
+
+    # Configure layout
+    fig.update_layout(
+        title=f"CS:GO Game Actions (Tick: 0 - {max_tick})",
+        xaxis=dict(
+            range=[0, plot_width],
+            showgrid=False,
+            zeroline=True,
+            showticklabels=True,
+            title="",
+            scaleanchor="y",
+            scaleratio=1,
+            autorange=False,
+            fixedrange=False,
+            constrain="domain",
+        ),
+        yaxis=dict(
+            range=[0, plot_height],
+            showgrid=False,
+            zeroline=True,
+            showticklabels=True,
+            title="",
+        ),
+        showlegend=True,
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.99,
+            bgcolor="rgba(255,255,255,0.8)",
+            bordercolor="rgba(0,0,0,0.2)",
+            borderwidth=1,
+        ),
+        height=fig_height,
+        margin=dict(l=0, r=0, t=50, b=50),
+    )
+    fig.update_xaxes(range=[0, plot_width])
+    fig.update_yaxes(range=[0, plot_height])
+
+    # Add event count annotation
+    event_counts = get_event_counts(filtered_data)
+    fig.add_annotation(
+        x=0.5,
+        y=-0.1,
+        xref="paper",
+        yref="paper",
+        text=f"Events: {event_counts['flashes']} flashes, {event_counts['kills']} kills, {event_counts['grenades']} grenades",
+        showarrow=False,
+        font=dict(size=12),
+        bgcolor="rgba(255,255,255,0.8)",
+        bordercolor="rgba(0,0,0,0.2)",
+        borderwidth=1,
+    )
+
+    return fig
+
+
+def filter_data_by_tick(round_dfs, min_tick, max_tick):
+    """Filter all dataframes by tick range"""
+    filtered_data = {}
+
+    # Filter locations
+    if "player_locations" in round_dfs and len(round_dfs["player_locations"]) > 0:
+        loc_mask = (round_dfs["player_locations"]["tick"] >= min_tick) & (
+            round_dfs["player_locations"]["tick"] <= max_tick
+        )
+        filtered_data["locations"] = round_dfs["player_locations"][loc_mask]
     else:
-        # Load and display the map image
-        map_img = plt.imread(map_path)
-        ax.imshow(map_img, extent=[0, image_dim, 0, image_dim])
+        filtered_data["locations"] = pd.DataFrame()
 
-        # Set plot limits and title
-        ax.set_xlim(0, image_dim)
-        ax.set_ylim(0, image_dim)
+    # Filter flashes
+    if "flashes" in round_dfs and len(round_dfs["flashes"]) > 0:
+        flash_mask = (round_dfs["flashes"]["tick"] >= min_tick) & (
+            round_dfs["flashes"]["tick"] <= max_tick
+        )
+        filtered_data["flashes"] = round_dfs["flashes"][flash_mask]
+    else:
+        filtered_data["flashes"] = pd.DataFrame()
 
-    ax.set_title(map_name.title())
-    fig.tight_layout()
+    # Filter kills
+    if "kills" in round_dfs and len(round_dfs["kills"]) > 0:
+        kill_mask = (round_dfs["kills"]["tick"] >= min_tick) & (
+            round_dfs["kills"]["tick"] <= max_tick
+        )
+        filtered_data["kills"] = round_dfs["kills"][kill_mask]
+    else:
+        filtered_data["kills"] = pd.DataFrame()
 
-    return fig, ax
+    # Filter grenades
+    if "grenades" in round_dfs and len(round_dfs["grenades"]) > 0:
+        grenade_mask = (round_dfs["grenades"]["throw_tick"] >= min_tick) & (
+            round_dfs["grenades"]["throw_tick"] <= max_tick
+        )
+        filtered_data["grenades"] = round_dfs["grenades"][grenade_mask]
+    else:
+        filtered_data["grenades"] = pd.DataFrame()
+
+    # Filter line data
+    line_filters = ["flash_lines", "kill_lines", "grenade_lines"]
+    tick_columns = ["tick", "tick", "throw_tick"]
+
+    for line_type, tick_col in zip(line_filters, tick_columns):
+        if line_type in round_dfs and len(round_dfs[line_type]) > 0:
+            line_mask = (round_dfs[line_type][tick_col] >= min_tick) & (
+                round_dfs[line_type][tick_col] <= max_tick
+            )
+            filtered_data[line_type] = round_dfs[line_type][line_mask]
+        else:
+            filtered_data[line_type] = pd.DataFrame()
+
+    return filtered_data
 
 
-def count_colorbar(fig):
-    result = 0
-    for ax in fig.axes:
-        if "colorbar" in ax.get_label():
-            result += 1
-    return result
-
-
-def plot_loc_img_unicode(
-    player_loc,
-    gradient_by,
-    size,
+def add_player_actions(
+    fig,
+    df,
+    size=10,
+    gradient_by="tick",
     color_by=None,
     color_dict=None,
     default_color="viridis",  # Default colormap when color_by is None
     alpha=0.5,
     marker_by=None,
     marker_dict=None,
-    default_marker="o",  # Default marker when marker_by is None
-    fig=None,
-    ax=None,
+    default_marker="\u2B24",  # Default marker when marker_by is None
+    legendgroup=None,
 ):
-    """
-    Plot locations with unicode markers or images.
+    if df.empty:
+        return
 
-    Parameters:
-    -----------
-    size : int/float
-        Size parameter that controls both text fontsize and image display size
-    marker_dict : dict
-        Dictionary mapping marker keys to either:
-        - Unicode strings (e.g., '⚽', '🏀') for text markers
-        - Image paths/URLs (e.g., 'path/to/image.png', 'https://...') for images
-        - PIL Image objects
-    """
-    if fig is None and ax is None:
-        fig, ax = plt.subplots(figsize=(10, 8))
+    min_grad = df[gradient_by].min()
+    max_grad = df[gradient_by].max()
 
-    selected_col = ["x", "y", gradient_by]
-    if color_by is not None:
-        selected_col.append(color_by)
+    normalized_grad = (df[gradient_by] - min_grad) / (max_grad - min_grad)
+
+    symbols = [default_marker] * len(df)
     if marker_by is not None:
-        selected_col.append(marker_by)
+        symbols = df[marker_by].map(marker_dict)
 
-    transformed = player_loc.reset_index()[selected_col]
-
-    # Normalize gradient
-    vmin = transformed[gradient_by].min()
-    vmax = transformed[gradient_by].max()
-    norm = plt.Normalize(vmin=vmin, vmax=vmax)
-
+    cmaps = [default_color] * len(df)
     if color_by is not None:
-        transformed[color_by] = transformed[color_by].str.lower()
+        cmaps = df[color_by].map(color_dict).to_list()
 
-    side = ["left", "right"]
-    n_colorbar = count_colorbar(fig)
-    previous_cmap = plt.get_cmap(default_color)  # Initial cmap
+    mapped_color = [
+        plt.get_cmap(cmap)(grad) for (cmap, grad) in zip(cmaps, normalized_grad)
+    ]
 
-    # Cache for loaded images to avoid reloading
-    image_cache = {}
+    colors = [f"rgba({mc[0]}, {mc[1]}, {mc[2]}, {alpha})" for mc in mapped_color]
 
-    # Calculate image parameters based on size
-    # Convert fontsize to approximate pixel size for images
-    # Typical conversion: fontsize * 1.3 gives approximate pixel height
-    image_pixel_size = int(size * 1.3)
-    image_size = (image_pixel_size, image_pixel_size)
-    # Auto-calculate zoom to match the size parameter
-    # Base zoom calculation to make image similar size to text
-    auto_zoom = size / 100.0  # Adjust this ratio as needed
-
-    for idx, row in transformed.iterrows():
-        # Determine colormap
-        if color_by is not None and pd.notna(row[color_by]):
-            color_key = row[color_by]
-            if color_key in color_dict:
-                cmap = plt.get_cmap(color_dict[color_key])
-                previous_cmap = cmap
-            else:
-                cmap = previous_cmap
-        else:
-            cmap = previous_cmap
-
-        # Normalize and get color
-        color_value = norm(row[gradient_by])
-        color = cmap(color_value)
-
-        # Determine marker
-        if marker_by is None:
-            marker_char = default_marker
-        else:
-            marker_key = row[marker_by]
-            marker_char = marker_dict.get(marker_key, default_marker)
-
-        # Check if marker_char is an image or unicode text
-        if _is_image_marker(marker_char):
-            # Handle image marker
-            try:
-                img_array = _load_and_process_image(
-                    marker_char, image_size, image_cache
-                )
-                if img_array is not None:
-                    # Apply color tint to image if needed (optional feature)
-                    if len(img_array.shape) == 3 and img_array.shape[2] == 4:  # RGBA
-                        tinted_img = _apply_color_tint(img_array, color, alpha)
-                    else:
-                        tinted_img = img_array
-
-                    # Create OffsetImage with auto-calculated zoom
-                    imagebox = OffsetImage(tinted_img, zoom=auto_zoom)
-                    ab = AnnotationBbox(
-                        imagebox, (row["x"], row["y"]), frameon=False, pad=0
-                    )
-                    ax.add_artist(ab)
-                else:
-                    # Fallback to text if image loading fails
-                    ax.text(
-                        row["x"],
-                        row["y"],
-                        "?",  # Question mark as fallback
-                        fontsize=size,
-                        color=color,
-                        ha="center",
-                        va="center",
-                        alpha=alpha,
-                    )
-            except Exception as e:
-                print(f"Error loading image for marker {marker_char}: {e}")
-                # Fallback to text
-                ax.text(
-                    row["x"],
-                    row["y"],
-                    "?",
-                    fontsize=size,
-                    color=color,
-                    ha="center",
-                    va="center",
-                    alpha=alpha,
-                )
-        else:
-            # Handle unicode/text marker (original behavior)
-            ax.text(
-                row["x"],
-                row["y"],
-                marker_char,
-                fontsize=size,
-                color=color,
-                ha="center",
-                va="center",
-                alpha=alpha,
+    if marker_by is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=df["x"],
+                y=df["y"] + 1,
+                mode="markers",
+                marker=dict(
+                    color=colors,
+                    size=size * 1.2,  # Larger background
+                    symbol="circle",
+                    line=dict(width=1, color="white"),
+                ),
+                name=f"{color_by} Background",
+                showlegend=False,  # Don't show in legend
+                hoverinfo="skip",  # Don't show hover for background
+                legendgroup=legendgroup,
             )
+        )
 
-    ax.set_xlabel("X Coordinate (pixels)")
-    ax.set_ylabel("Y Coordinate (pixels)")
-
-    # Add colorbars if color_by is provided
-    if color_by is not None:
-        for idx, (color_cat, cmap_name) in enumerate(
-            list(color_dict.items())[: 2 - n_colorbar]
-        ):
-            positions = transformed[transformed[color_by] == color_cat]
-            dummy_scatter = ax.scatter(
-                positions["x"],
-                positions["y"],
-                c=positions[gradient_by],
-                cmap=cmap_name,
-                s=0,
-                alpha=0.5,
-                norm=norm,
-            )
-            cbar = fig.colorbar(
-                dummy_scatter,
-                ax=ax,
-                location=side[idx],
-                pad=0.02,
-                fraction=0.046,
-                shrink=0.6,
-            )
-            cbar.set_label(f"{color_cat.upper()} {gradient_by.title()}", fontsize=8)
-            cbar.ax.tick_params(labelsize=7)
-
-    return fig, ax
+    fig.add_trace(
+        go.Scatter(
+            x=df["x"],
+            y=df["y"],
+            mode="text",
+            text=symbols,
+            textfont=dict(
+                color=colors,
+                size=size,
+            ),
+            opacity=alpha,
+            hovertemplate=f"<br>"
+            + "X: %{x}<br>"
+            + "Y: %{y}<br>"
+            + "Tick: %{customdata}<extra></extra>",
+            customdata=df[gradient_by],
+            showlegend=True,
+            legendgroup=legendgroup,
+            name=legendgroup,
+        )
+    )
 
 
-def _is_image_marker(marker):
-    """
-    Determine if a marker is an image (file path, URL, or PIL Image object)
-    """
-    if isinstance(marker, Image.Image):
-        return True
-
-    if isinstance(marker, str):
-        # Check if it's a file path or URL
-        if (
-            marker.startswith("http://")
-            or marker.startswith("https://")
-            or marker.endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff"))
-        ):
-            return True
-
-    return False
-
-
-def _load_and_process_image(marker, target_size, cache):
-    """
-    Load and process image from various sources
-    """
-    # Use cache key
-    cache_key = str(marker) + str(target_size)
-    if cache_key in cache:
-        return cache[cache_key]
-
-    try:
-        img = None
-
-        if isinstance(marker, Image.Image):
-            # Already a PIL Image
-            img = marker
-        elif isinstance(marker, str):
-            if marker.startswith("http://") or marker.startswith("https://"):
-                # URL
-                response = requests.get(marker, timeout=10)
-                response.raise_for_status()
-                img = Image.open(BytesIO(response.content))
-            else:
-                # File path
-                img = Image.open(marker)
-
-        if img is not None:
-            # Convert to RGBA for consistency
-            if img.mode != "RGBA":
-                img = img.convert("RGBA")
-
-            # Resize image
-            img_resized = img.resize(target_size, Image.LANCZOS)
-
-            # Convert to numpy array
-            img_array = np.array(img_resized)
-
-            # Cache the processed image
-            cache[cache_key] = img_array
-
-            return img_array
-
-    except Exception as e:
-        print(f"Failed to load image {marker}: {e}")
-        cache[cache_key] = None
-        return None
-
-    return None
-
-
-def _apply_color_tint(img_array, color, alpha_factor=1.0):
-    """
-    Apply color tint to RGBA image while preserving transparency
-    """
-    if len(img_array.shape) != 3 or img_array.shape[2] != 4:
-        return img_array
-
-    # Create a copy to avoid modifying original
-    tinted = img_array.copy().astype(float)
-
-    # Extract RGB components from matplotlib color (0-1 range)
-    if len(color) >= 3:
-        r, g, b = color[:3]
-
-        # Apply tint to RGB channels where alpha > 0
-        alpha_mask = tinted[:, :, 3] > 0
-        tinted[alpha_mask, 0] = tinted[alpha_mask, 0] * r / 255.0 * 255.0
-        tinted[alpha_mask, 1] = tinted[alpha_mask, 1] * g / 255.0 * 255.0
-        tinted[alpha_mask, 2] = tinted[alpha_mask, 2] * b / 255.0 * 255.0
-
-    # Apply alpha factor
-    tinted[:, :, 3] = tinted[:, :, 3] * alpha_factor
-
-    return tinted.astype(np.uint8)
-
-
-def plot_line(
-    actions,
-    status1,
-    status2,
-    gradient_by,
-    color_by=None,
-    color_dict={},
-    default_color="Greys",
-    linewidth=1,
-    alpha=1,
-    fig=None,
-    ax=None,
+def add_connection_lines(
+    fig, df, st1, st2, gradient_by, gradient="viridis", linewidth=1, alpha=1
 ):
-    if fig is None and ax is None:
-        fig, ax = plt.subplots(figsize=(10, 8))
+    """Add connection lines between related events"""
+    if df.empty:
+        return
 
-    vmin = actions[gradient_by].min()
-    vmax = actions[gradient_by].max()
-    norm = plt.Normalize(vmin=vmin, vmax=vmax)
+    min_grad = df[gradient_by].min()
+    max_grad = df[gradient_by].max()
 
-    for _, row in actions.iterrows():
-        cmap = plt.get_cmap(
-            color_dict.get(row[color_by], default_color)
-            if color_by is not None
-            else default_color
+    for _, row in df.iterrows():
+        cmap = plt.get_cmap(gradient)
+
+        color = cmap((row[gradient_by] - min_grad) / (max_grad - min_grad))
+        str_color = f"rgba({color[0]}, {color[1]}, {color[2]}, {alpha})"
+
+        fig.add_trace(
+            go.Scatter(
+                x=[row[f"{st1}_x"], row[f"{st2}_x"]],
+                y=[row[f"{st1}_y"], row[f"{st2}_y"]],
+                mode="lines",
+                line=dict(color=str_color, width=linewidth),
+                showlegend=False,
+                hoverinfo="skip",
+            )
         )
 
-        color_value = norm(row[gradient_by])
-        color = cmap(color_value)
 
-        ax.plot(
-            [row[f"{status1}_x"], row[f"{status2}_x"]],
-            [row[f"{status1}_y"], row[f"{status2}_y"]],
-            alpha=alpha,
-            linewidth=linewidth,
-            color=color,
-        )
-
-    return fig, ax
+def get_event_counts(filtered_data):
+    """Get counts of different event types"""
+    counts = {
+        "flashes": len(filtered_data.get("flashes", [])),
+        "kills": len(filtered_data.get("kills", [])),
+        "grenades": len(filtered_data.get("grenades", [])),
+    }
+    return counts
 
 
 def plot_actions_by_max_tick(
@@ -448,194 +466,29 @@ def plot_actions_by_max_tick(
     grenade_size,
     show_lines,
     transformed_data,
+    fig_height,
 ):
-    """
-    Plot game actions filtered by max tick (min_tick always 0)
-    """
-    min_tick = 0  # Always start from tick 0
+    """Plotly version of the original function"""
 
-    # Start with map
-    img_fig, img_ax = plot_map(transformed_data["map"], (12, 10))
-    current_fig, current_ax = img_fig, img_ax
-
-    loc_mask = (round_dfs["player_locations"]["tick"] >= min_tick) & (
-        round_dfs["player_locations"]["tick"] <= max_tick
-    )
-    # Filter actions by tick range
-    flash_mask = (round_dfs["flashes"]["tick"] >= min_tick) & (
-        round_dfs["flashes"]["tick"] <= max_tick
-    )
-    kill_mask = (round_dfs["kills"]["tick"] >= min_tick) & (
-        round_dfs["kills"]["tick"] <= max_tick
-    )
-    grenade_mask = (round_dfs["grenades"]["throw_tick"] >= min_tick) & (
-        round_dfs["grenades"]["throw_tick"] <= max_tick
-    )
-    filtered_loc = (
-        round_dfs["player_locations"][loc_mask]
-        if isinstance(round_dfs["player_locations"], pd.DataFrame)
-        else round_dfs["player_locations"]
+    fig = create_plotly_actions_plot(
+        round_dfs=round_dfs,
+        max_tick=max_tick,
+        show_loc=show_loc,
+        show_flash=show_flash,
+        show_kills=show_kills,
+        show_grenades=show_grenades,
+        flash_alpha=flash_alpha,
+        kill_alpha=kill_alpha,
+        grenade_alpha=grenade_alpha,
+        flash_size=flash_size,
+        kill_size=kill_size,
+        grenade_size=grenade_size,
+        show_lines=show_lines,
+        map_name=transformed_data.get("map", "de_dust2"),
+        fig_height=fig_height,
     )
 
-    filtered_flash = (
-        round_dfs["flashes"][flash_mask]
-        if isinstance(round_dfs["flashes"], pd.DataFrame)
-        else round_dfs["flashes"]
-    )
-    filtered_kills = (
-        round_dfs["kills"][kill_mask]
-        if isinstance(round_dfs["kills"], pd.DataFrame)
-        else round_dfs["kills"]
-    )
-    filtered_grenades = (
-        round_dfs["grenades"][grenade_mask]
-        if isinstance(round_dfs["grenades"], pd.DataFrame)
-        else round_dfs["grenades"]
-    )
-
-    flash_count = (
-        filtered_flash.attacker_side.notnull().sum()
-        if isinstance(filtered_flash, pd.DataFrame)
-        else 0
-    )
-    kill_count = (
-        filtered_kills.attacker_side.notnull().sum()
-        if isinstance(filtered_kills, pd.DataFrame)
-        else 0
-    )
-    grenade_count = (
-        filtered_grenades.thrower_side.notnull().sum()
-        if isinstance(filtered_grenades, pd.DataFrame)
-        else 0
-    )
-
-    if show_loc and len(filtered_loc) > 0:
-        loc_fig, loc_ax = plot_loc_img_unicode(
-            filtered_loc,
-            gradient_by="tick",
-            size=5,
-            color_by="side",
-            color_dict=side_color,
-            default_marker="$\u2B24$",
-            alpha=0.4,
-            fig=current_fig,
-            ax=current_ax,
-        )
-        current_fig, current_ax = loc_fig, loc_ax
-
-    # Plot flashes
-    if show_flash and len(filtered_flash) > 0:
-        flash_fig, flash_ax = plot_loc_img_unicode(
-            filtered_flash,
-            gradient_by="tick",
-            size=flash_size,
-            color_by="side",
-            color_dict=side_color,
-            marker_by="status",
-            marker_dict=flash_marker,
-            alpha=flash_alpha,
-            fig=current_fig,
-            ax=current_ax,
-        )
-        current_fig, current_ax = flash_fig, flash_ax
-
-        if show_lines:
-            flash_co_mask = (round_dfs["flash_lines"]["tick"] >= min_tick) & (
-                round_dfs["flash_lines"]["tick"] <= max_tick
-            )
-            filtered_f_co = round_dfs["flash_lines"][flash_co_mask]
-            if len(filtered_f_co) > 0:
-                cf_fig, cf_ax = plot_line(
-                    filtered_f_co,
-                    "attacker",
-                    "player",
-                    "tick",
-                    default_color="viridis",
-                    fig=current_fig,
-                    ax=current_ax,
-                )
-                current_fig, current_ax = cf_fig, cf_ax
-
-    # Plot kills
-    if show_kills and len(filtered_kills) > 0:
-        kill_fig, kill_ax = plot_loc_img_unicode(
-            filtered_kills,
-            gradient_by="tick",
-            size=kill_size,
-            color_by="side",
-            color_dict=side_color,
-            marker_by="status",
-            marker_dict=kill_marker,
-            alpha=kill_alpha,
-            fig=current_fig,
-            ax=current_ax,
-        )
-        current_fig, current_ax = kill_fig, kill_ax
-
-        if show_lines:
-            kill_co_mask = (round_dfs["kill_lines"]["tick"] >= min_tick) & (
-                round_dfs["kill_lines"]["tick"] <= max_tick
-            )
-            filtered_k_co = round_dfs["kill_lines"][kill_co_mask]
-            if len(filtered_k_co) > 0:
-                ck_fig, ck_ax = plot_line(
-                    filtered_k_co,
-                    "attacker",
-                    "victim",
-                    "tick",
-                    default_color="Reds",
-                    fig=current_fig,
-                    ax=current_ax,
-                )
-                current_fig, current_ax = ck_fig, ck_ax
-
-    # Plot grenades
-    if show_grenades and len(filtered_grenades) > 0:
-        grenade_fig, grenade_ax = plot_loc_img_unicode(
-            filtered_grenades,
-            gradient_by="throw_tick",
-            size=grenade_size,
-            color_by="side",
-            color_dict=side_color,
-            marker_by="status",
-            marker_dict=grenade_marker,
-            alpha=grenade_alpha,
-            fig=current_fig,
-            ax=current_ax,
-        )
-        current_fig, current_ax = grenade_fig, grenade_ax
-
-        if show_lines:
-            grenade_co_mask = (round_dfs["grenade_lines"]["throw_tick"] >= min_tick) & (
-                round_dfs["grenade_lines"]["throw_tick"] <= max_tick
-            )
-            filtered_g_co = round_dfs["grenade_lines"][grenade_co_mask]
-            if len(filtered_g_co) > 0:
-                cg_fig, cg_ax = plot_line(
-                    filtered_g_co,
-                    "thrower",
-                    "grenade",
-                    "throw_tick",
-                    default_color="Greens",
-                    fig=current_fig,
-                    ax=current_ax,
-                )
-                current_fig, current_ax = cg_fig, cg_ax
-
-    # Add title with tick range info
-    plt.title(f"Game Actions (Tick range: 0 - {max_tick})", fontsize=14)
-    info_text = f"Events in range: {flash_count} flashes, {kill_count} kills, {grenade_count} grenades"
-    plt.figtext(
-        0.5,
-        0.01,
-        info_text,
-        ha="center",
-        fontsize=12,
-        bbox=dict(facecolor="white", alpha=0.8),
-    )
-
-    plt.tight_layout()
-    return current_fig, current_ax
+    return fig
 
 
 def plot_round_timeline_plotly(df):
