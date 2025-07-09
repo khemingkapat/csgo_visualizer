@@ -236,7 +236,7 @@ def location_page():
         grenade_size,
         show_lines,
         transformed_data,
-        fig_height=1600,
+        fig_height=1200,
     )
     st.plotly_chart(fig, use_container_width=True)
     # st.session_state.visualization_updated = True
