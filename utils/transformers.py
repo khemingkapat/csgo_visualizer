@@ -664,17 +664,19 @@ def transform_all_data(clean_dfs, all_map_data):
         rounds_sum_df["bomb_plant_tick"].fillna(-1).astype(int)
     )
 
-    rounds_sum_df["ct_fire_grenade"] = (
-        rounds_sum_df["ct_incendiary_grenade"] + rounds_sum_df["ct_molotov"]
-    )
-    rounds_sum_df["t_fire_grenade"] = (
-        rounds_sum_df["t_incendiary_grenade"] + rounds_sum_df["t_molotov"]
-    )
+    rounds_sum_df["ct_fire_grenade"] = rounds_sum_df.get(
+        "ct_incendiary_grenade", 0
+    ) + rounds_sum_df.get("ct_molotov", 0)
+
+    rounds_sum_df["t_fire_grenade"] = rounds_sum_df.get(
+        "t_incendiary_grenade", 0
+    ) + rounds_sum_df.get("t_molotov", 0)
 
     rounds_sum_df.drop(
         ["ct_incendiary_grenade", "t_incendiary_grenade", "ct_molotov", "t_molotov"],
         axis=1,
         inplace=True,
+        errors="ignore",
     )
 
     count_columns = [
