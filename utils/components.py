@@ -1,3 +1,4 @@
+from matplotlib import legend
 import streamlit as st
 import matplotlib.pyplot as plt
 import json
@@ -154,6 +155,7 @@ def create_plotly_actions_plot(
 
     # Add flashes
     if show_flash and len(filtered_data["flashes"]) > 0:
+        legendgroup = "Flashes"
         add_player_actions(
             fig,
             filtered_data["flashes"],
@@ -164,7 +166,7 @@ def create_plotly_actions_plot(
             color_dict=side_color,
             marker_by="status",
             marker_dict=flash_marker,
-            legendgroup="Flashes",
+            legendgroup=legendgroup,
         )
 
         if show_lines and len(filtered_data["flash_lines"]) > 0:
@@ -174,9 +176,11 @@ def create_plotly_actions_plot(
                 st1="attacker",
                 st2="player",
                 gradient_by="tick",
+                legendgroup=legendgroup,
             )
     # Add kills
     if show_kills and len(filtered_data["kills"]) > 0:
+        legendgroup = "Kills"
         add_player_actions(
             fig,
             filtered_data["kills"],
@@ -187,7 +191,7 @@ def create_plotly_actions_plot(
             color_dict=side_color,
             marker_by="status",
             marker_dict=kill_marker,
-            legendgroup="Kills",
+            legendgroup=legendgroup,
         )
 
         if show_lines and len(filtered_data["kill_lines"]) > 0:
@@ -197,10 +201,12 @@ def create_plotly_actions_plot(
                 st1="attacker",
                 st2="victim",
                 gradient_by="tick",
+                legendgroup=legendgroup,
             )
 
     # Add grenades
     if show_grenades and len(filtered_data["grenades"]) > 0:
+        legendgroup = "Grenades"
         add_player_actions(
             fig,
             filtered_data["grenades"],
@@ -211,7 +217,7 @@ def create_plotly_actions_plot(
             color_dict=side_color,
             marker_by="status",
             marker_dict=grenade_marker,
-            legendgroup="Grenades",
+            legendgroup=legendgroup,
         )
 
         if show_lines and len(filtered_data["grenade_lines"]) > 0:
@@ -221,18 +227,41 @@ def create_plotly_actions_plot(
                 st1="thrower",
                 st2="grenade",
                 gradient_by="throw_tick",
+                legendgroup=legendgroup,
             )
 
     # Configure layout
     fig.update_layout(
         title=f"CS:GO Game Actions (Tick: 0 - {max_tick})",
+        dragmode="pan",
+        updatemenus=[
+            dict(
+                type="buttons",
+                direction="left",
+                buttons=list(
+                    [
+                        dict(
+                            args=[{"dragmode": "pan"}], label="Pan", method="relayout"
+                        ),
+                        dict(
+                            args=[{"dragmode": "zoom"}], label="Zoom", method="relayout"
+                        ),
+                    ]
+                ),
+                pad={"r": 10, "t": 10},
+                showactive=True,
+                x=0.01,
+                xanchor="left",
+                y=1.02,
+                yanchor="top",
+            ),
+        ],
         xaxis=dict(
             range=[0, plot_width],
             showgrid=False,
             zeroline=True,
             showticklabels=True,
             title="",
-            scaleanchor="y",
             scaleratio=1,
             autorange=False,
             fixedrange=False,
@@ -414,7 +443,15 @@ def add_player_actions(
 
 
 def add_connection_lines(
-    fig, df, st1, st2, gradient_by, gradient="viridis", linewidth=1, alpha=1
+    fig,
+    df,
+    st1,
+    st2,
+    gradient_by,
+    gradient="viridis",
+    linewidth=1,
+    alpha=1,
+    legendgroup=None,
 ):
     """Add connection lines between related events"""
     if df.empty:
@@ -437,6 +474,7 @@ def add_connection_lines(
                 line=dict(color=str_color, width=linewidth),
                 showlegend=False,
                 hoverinfo="skip",
+                legendgroup=legendgroup,
             )
         )
 
