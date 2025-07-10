@@ -1,3 +1,4 @@
+image_dim = 1024
 side_color = {"CT": "Blues", "T": "Reds"}
 
 flash_marker = {
