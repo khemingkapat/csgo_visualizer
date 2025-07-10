@@ -9,10 +9,11 @@ from utils.components import (
     plot_actions_by_max_tick,
     plot_round_timeline_plotly,
 )
-from utils.parsers import parse_json_to_dfs
-from utils.preprocessing import preprocess
 from utils.transformers import transform_all_data
 from utils.symbols import *
+
+from parser import Parser
+from preprocessor import Preprocessor
 
 # Set page config for full width layout
 st.set_page_config(
@@ -49,8 +50,8 @@ all_map_data = load_map_data()
 @st.cache_data
 def load_and_preprocess_data(json_data):
     """Load and preprocess all data at once"""
-    dfs = dict(parse_json_to_dfs(json_data))
-    clean_dfs = preprocess(dfs)
+    dfs = dict(Parser.parse_json_to_dfs(json_data))
+    clean_dfs = Preprocessor.preprocess_single_match(dfs)
     return clean_dfs
 
 
@@ -84,8 +85,8 @@ def home_page():
         # Process data immediately and store in session state
         with st.spinner("Processing data... This may take a moment."):
             # Parse and preprocess
-            dfs = dict(parse_json_to_dfs(uploaded_data))
-            st.session_state.clean_dfs = preprocess(dfs)
+            dfs = Parser.parse_json_to_dfs(uploaded_data)
+            st.session_state.clean_dfs = Preprocessor.preprocess_single_match(dfs)
 
             # Transform data
             st.session_state.transformed_data = transform_all_data(
