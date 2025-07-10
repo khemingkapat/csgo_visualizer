@@ -11,7 +11,7 @@ import numpy as np
 from PIL import Image
 
 
-def upload_and_parse_json(preview_limit=10):
+def upload_and_parse_json(preview_limit=10) -> dict | None:
     """
     Streamlit widget to upload a JSON file and return the parsed content.
 
