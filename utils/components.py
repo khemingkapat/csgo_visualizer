@@ -583,7 +583,7 @@ def plot_scaled_feature_difference(rounds_sum_df: pd.DataFrame):
             features_to_compare.remove(col)
 
     features_to_compare = [
-        col for col in features_to_compare if not col.startswith("round_end_reason_")
+        col for col in features_to_compare if not col.startswith("round_end_reason")
     ]
 
     # Calculate percentage difference
@@ -591,12 +591,16 @@ def plot_scaled_feature_difference(rounds_sum_df: pd.DataFrame):
     for feature in features_to_compare:
         t_mean = t_win_df[feature].mean()
         ct_mean = ct_win_df[feature].mean()
-        if t_mean != 0:
-            pct_change = ((ct_mean / t_mean) - 1) * 100
+        if (t_mean > 0) and (ct_mean > 0):
+            percentage_df.loc[feature, "%diff"] = ((ct_mean / t_mean) - 1) * 100
+        elif (t_mean == 0) and (ct_mean == 0):
+            percentage_df.loc[feature, "%diff"] = 0
         else:
-            pct_change = float("inf") if ct_mean > 0 else float("-inf")
-        percentage_df.loc[feature, "%diff"] = pct_change
-
+            percentage_df.loc[feature, "%diff"] = (
+                percentage_df["%diff"].max() * 1.1
+                if ct_mean > 0
+                else percentage_df["%diff"].min() * 1.1
+            )
     # Prepare for plotting
     percentage_df.reset_index(inplace=True)
     percentage_df.rename(columns={"index": "Feature"}, inplace=True)
@@ -912,14 +916,14 @@ def plot_location_change_analysis(clean_dfs, round_num):
 
 def plot_combined_economy_with_reasons(rounds_sum_df: pd.DataFrame):
     # Reconstruct `round_end_reason` from one-hot
-    reason_cols = [
-        col for col in rounds_sum_df.columns if col.startswith("round_end_reason_")
-    ]
-    rounds_sum_df = rounds_sum_df.copy()
-    rounds_sum_df["round_end_reason"] = rounds_sum_df[reason_cols].idxmax(axis=1)
-    rounds_sum_df["round_end_reason"] = rounds_sum_df["round_end_reason"].str.replace(
-        "round_end_reason_", ""
-    )
+    # reason_cols = [
+    #     col for col in rounds_sum_df.columns if col.startswith("round_end_reason_")
+    # ]
+    # rounds_sum_df = rounds_sum_df.copy()
+    # rounds_sum_df["round_end_reason"] = rounds_sum_df[reason_cols].idxmax(axis=1)
+    # rounds_sum_df["round_end_reason"] = rounds_sum_df["round_end_reason"].str.replace(
+    #     "round_end_reason_", ""
+    # )
 
     # Color mapping
     win_reason_colors = {
