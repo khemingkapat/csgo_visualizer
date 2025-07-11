@@ -9,11 +9,11 @@ from utils.components import (
     plot_actions_by_max_tick,
     plot_round_timeline_plotly,
 )
-from utils.transformers import transform_all_data
 from utils.symbols import *
 
 from parser import Parser
 from preprocessor import Preprocessor
+from transformer import Transformer
 
 # Set page config for full width layout
 st.set_page_config(
@@ -89,7 +89,7 @@ def home_page():
             st.session_state.clean_dfs = Preprocessor.preprocess_single_match(dfs)
 
             # Transform data
-            st.session_state.transformed_data = transform_all_data(
+            st.session_state.transformed_data = Transformer.transform_all_data(
                 st.session_state.clean_dfs, all_map_data
             )
 
