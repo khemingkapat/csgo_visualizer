@@ -30,10 +30,10 @@ def index_dfs(
     indexed_dfs = {}
 
     for df_name, df in dfs_dict.items():
-        print(f"{df_name} => {df.columns}")
+        # print(f"{df_name} => {df.columns}")
         if df_name in include:
             indexed_dfs[df_name] = df.set_index(index_by)
-            print(f"Indexed DataFrame '{df_name}' by {index_by}.")
+            # print(f"Indexed DataFrame '{df_name}' by {index_by}.")
         else:
             indexed_dfs[df_name] = df.copy()
 
