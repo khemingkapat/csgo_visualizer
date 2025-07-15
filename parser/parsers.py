@@ -15,7 +15,7 @@ def camel_to_snake(name):
     return name
 
 
-def parse_json_to_dfs(data):
+def parse_json_to_dfs(data: dict) -> dict[str, pd.DataFrame]:
 
     parsed = {
         "matches": [],
@@ -248,8 +248,10 @@ def parse_json_to_dfs(data):
                                     parsed["inventory"].append(inventory_data)
 
     # Convert all parsed data to DataFrames with snake_case column names
+    result = {}
     for key, value in parsed.items():
         if value:
             df = pd.DataFrame(value).drop_duplicates()
             df.columns = [camel_to_snake(col) for col in df.columns]
-            yield key, df
+            result[key] = df
+    return result
