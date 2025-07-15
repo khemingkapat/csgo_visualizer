@@ -1,19 +1,16 @@
 import streamlit as st
 import json
 import pandas as pd
-from utils.components import (
-    plot_combined_economy_with_reasons,
-    plot_location_change_analysis,
-    plot_scaled_feature_difference,
-    upload_and_parse_json,
-    plot_actions_by_max_tick,
-    plot_round_timeline_plotly,
-)
+from utils.components import upload_and_parse_json
+
 from utils.symbols import *
 
 from parser import Parser
 from preprocessor import Preprocessor
 from transformer import Transformer
+from visualizer import Visualizer
+from visualizer.action_location import plot_chained_vector
+from visualizer.logic.pca import chain_pc_vectors, temporal_pca
 
 # Set page config for full width layout
 st.set_page_config(
@@ -44,18 +41,6 @@ def load_map_data():
 
 
 all_map_data = load_map_data()
-
-
-# Cache the preprocessing steps to avoid redundant computations
-@st.cache_data
-def load_and_preprocess_data(json_data):
-    """Load and preprocess all data at once"""
-    dfs = dict(Parser.parse_json_to_dfs(json_data))
-    clean_dfs = Preprocessor.preprocess_single_match(dfs)
-    return clean_dfs
-
-
-# Get tick range for a specific round
 
 
 # Home page for file upload
@@ -117,7 +102,7 @@ def overview_page():
     st.subheader("Match Information")
     st.info(f"Map: {match_info['map_name']} | Date: {match_info['match_date']}")
 
-    fig = plot_round_timeline_plotly(transformed_data["round_results"])
+    fig = Visualizer.plot_round_timeline_plotly(transformed_data["round_results"])
     st.plotly_chart(fig, use_container_width=True)
 
     # Use columns to better organize content in full width
@@ -128,7 +113,8 @@ def overview_page():
         st.dataframe(transformed_data["player_stats"], use_container_width=True)
     with col2:
         st.subheader("Side Win Features' Different")
-        _, fig = plot_scaled_feature_difference(transformed_data["rounds_sum"])
+        percentage_df = Visualizer.get_value_difference(transformed_data["rounds_sum"])
+        fig = Visualizer.plot_scaled_feature_difference(percentage_df)
         st.plotly_chart(fig, use_container_width=True)
 
 
@@ -176,10 +162,11 @@ def location_page():
 
     # Get tick range for selected round
 
-    round_dfs = {
+    round_dfs: dict[str, pd.DataFrame] = {
         k: v[v.index == selected_round] if isinstance(v, pd.DataFrame) else v
         for k, v in transformed_data.items()
     }
+    start_tick = round_dfs["player_locations"].tick.min()
     end_tick = round_dfs["player_locations"].tick.max()
 
     # Create sidebar for controls
@@ -189,9 +176,9 @@ def location_page():
     st.sidebar.subheader("Tick Control")
     max_tick = st.sidebar.slider(
         "Max Tick",
-        min_value=0,
+        min_value=start_tick,
         max_value=int(end_tick),
-        value=(end_tick) // 2,
+        value=(start_tick + end_tick) // 2,
         help="Show events from tick 0 up to this tick value",
     )
 
@@ -222,9 +209,10 @@ def location_page():
     st.subheader(f"Game Actions - Round {selected_round}")
 
     # Update visualization if button clicked or parameters changed
-    fig = plot_actions_by_max_tick(
-        round_dfs,
-        max_tick,
+    filtered_data = Visualizer.filter_data_by_tick(round_dfs, 0, max_tick)
+    fig = Visualizer.create_plotly_actions_plot(
+        filtered_data,
+        st.session_state.transformed_data["map"],
         show_loc,
         show_flash,
         show_kills,
@@ -236,9 +224,23 @@ def location_page():
         kill_size,
         grenade_size,
         show_lines,
-        transformed_data,
         fig_height=1200,
     )
+    ct_df = Visualizer.get_side_df(round_dfs["player_locations"], sampling_rate=10)
+    tpca_result_ct = Visualizer.temporal_pca(ct_df)
+    chained_vecs_ct = chain_pc_vectors(tpca_result_ct)
+    Visualizer.plot_chained_vector(fig, chained_vecs_ct)
+
+    t_df = Visualizer.get_side_df(
+        round_dfs["player_locations"], sampling_rate=10, side="T"
+    )
+    tpca_result_t = Visualizer.temporal_pca(t_df)
+    chained_vecs_t = chain_pc_vectors(tpca_result_t)
+    Visualizer.plot_chained_vector(fig, chained_vecs_t)
+
+    cluster_df = Visualizer.apply_cluster_community(round_dfs["player_locations"])
+    Visualizer.plot_community(fig, cluster_df)
+
     st.plotly_chart(fig, use_container_width=True)
     # st.session_state.visualization_updated = True
 
@@ -352,11 +354,12 @@ def action_page():
         selected_round = st.selectbox(
             "Select Round",
             options=available_rounds,
+            index=1,
             format_func=lambda x: f"Round {x}",
             key="round_selector",
         )
 
-    fig = plot_location_change_analysis(clean_dfs, selected_round)
+    fig = Visualizer.plot_location_change_analysis(clean_dfs, selected_round)
 
     st.plotly_chart(fig, use_container_width=True)
 
@@ -373,7 +376,7 @@ def economy_page():
 
     transformed_data = st.session_state.transformed_data
     # Create a nicer layout for "under development" message
-    fig = plot_combined_economy_with_reasons(transformed_data["rounds_sum"])
+    fig = Visualizer.plot_combined_economy_with_reasons(transformed_data["rounds_sum"])
     st.plotly_chart(fig, use_container_width=True)
 
 
