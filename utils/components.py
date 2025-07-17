@@ -2,7 +2,7 @@ import streamlit as st
 import json
 
 
-def upload_and_parse_json(preview_limit=10):
+def upload_and_parse_json(preview_limit=10) -> dict:
     """
     Streamlit widget to upload a JSON file and return the parsed content.
 
@@ -40,8 +40,8 @@ def upload_and_parse_json(preview_limit=10):
 
         except Exception as e:
             st.error(f"❌ Error loading JSON: {e}")
-            return None
+            return {}
 
     else:
         st.info("📂 Please upload a JSON file.")
-        return None
+        return {}
