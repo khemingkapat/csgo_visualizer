@@ -52,7 +52,7 @@ def movement_page():
 
     # Create sidebar for controls
     st.sidebar.header("Visualization Controls")
-    sampling_rate = st.sidebar.slider("Sampling Rate", 10, 100, 20, step=10)
+    sampling_rate = st.sidebar.slider("Sampling Rate", 10, 100, 50, step=10)
 
     # Use round's end tick as the default max_tick
 
