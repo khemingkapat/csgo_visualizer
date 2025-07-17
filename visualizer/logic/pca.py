@@ -168,7 +168,7 @@ def calculate_pc_vectors(
 
     vectors = dict()
     for pc, row in components.iterrows():
-        dx = -row[x_cols].sum()
+        dx = row[x_cols].sum()
         dy = row[y_cols].sum()
 
         end_pos = (start_pos[0] + dx * scale_factor, start_pos[1] + dy * scale_factor)
@@ -265,7 +265,6 @@ def group_points_by_pc(components: pd.DataFrame):
 
     if not x_cols or not y_cols:
         return pc_groups
-    print(components)
 
     for p_idx in range(1, (components.columns.size // 2) + 1):
         best_vec = None
@@ -326,14 +325,11 @@ def rotate_vectors_by_group_direction(
             pc_vectors[vec]["start_pos"]
         )
         if angle_between_vectors(group_direction.loc[vec].values, arr_vec) > 150:
-            print(f"rotated {vec}")
             # arr_vec *= -1
             rotated_vecs[vec]["end_pos"] = (
                 rotated_vecs[vec]["start_pos"][0] - arr_vec[0],
                 rotated_vecs[vec]["start_pos"][1] - arr_vec[1],
             )
-            print(f"{pc_vectors[vec]=}")
-            print(f"{rotated_vecs[vec]=}")
     return rotated_vecs
 
 
