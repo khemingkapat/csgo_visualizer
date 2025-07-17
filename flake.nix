@@ -21,6 +21,8 @@
         pythonEnv = python.withPackages (
           ps: with ps; [
             pip
+            setuptools
+            wheel
             numpy
             pandas
             matplotlib
