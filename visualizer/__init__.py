@@ -1,13 +1,12 @@
 import pandas as pd
 from .action_location import (
-    plot_chained_vector,
     plot_map,
     create_plotly_actions_plot,
     get_event_counts,
     add_action_connection,
     add_player_action,
-    plot_community,
 )
+from .movement import plot_chained_vector, plot_community
 from .overview import plot_round_timeline_plotly, _plot_scaled_feature_difference
 from .action_timeline import plot_location_change_analysis
 from .round_economy import plot_combined_economy_with_reasons
@@ -56,9 +55,13 @@ class Visualizer:
     get_cluster_lineage = staticmethod(get_cluster_lineage)
 
     @staticmethod
-    def apply_cluster_community(transformed_loc: pd.DataFrame) -> pd.DataFrame:
+    def apply_cluster_community(
+        transformed_loc: pd.DataFrame, sampling_rate: int = 20
+    ) -> pd.DataFrame:
         tf_loc = transformed_loc.loc[:, ["tick", "side", "steam_id", "x", "y"]]
-        clustered_players_df = Visualizer.cluster_player_communities(tf_loc)
+        clustered_players_df = Visualizer.cluster_player_communities(
+            tf_loc, sampling_rate=sampling_rate
+        )
         cluster_df = Visualizer.transform_to_cluster(clustered_players_df)
 
         to_delete_indices = set()
