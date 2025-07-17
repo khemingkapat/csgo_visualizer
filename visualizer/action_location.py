@@ -224,7 +224,7 @@ def create_plotly_actions_plot(
             y=0.99,
             xanchor="left",
             x=0.99,
-            bgcolor="rgba(255,255,255,0.8)",
+            bgcolor="rgba(255,255,255,0.0)",
             bordercolor="rgba(0,0,0,0.2)",
             borderwidth=1,
         ),
