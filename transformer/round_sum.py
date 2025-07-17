@@ -53,6 +53,10 @@ def get_round_sum(dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
     for col in default_columns:
         rounds_sum_df[col] = 0
+        if col.endswith("prob") or col.endswith("duration"):
+            rounds_sum_df[col] = rounds_sum_df[col].astype(float)
+        else:
+            rounds_sum_df[col] = rounds_sum_df[col].astype(int)
 
     if "flashes" in dfs and not dfs["flashes"].empty:
 
@@ -96,9 +100,15 @@ def get_round_sum(dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
                 rounds_sum_df.loc[idx, "t_flashed"] = flash_agg.loc[idx, "player_side"][
                     "t_flashed"
                 ]
+                # rounds_sum_df["ct_avg_flash_duration"] = rounds_sum_df[
+                #     "ct_avg_flash_duration"
+                # ].astype(float)
                 rounds_sum_df.loc[idx, "ct_avg_flash_duration"] = flash_agg.loc[
                     idx, "flash_duration"
                 ]["ct_avg_flash_duration"]
+                # rounds_sum_df["t_avg_flash_duration"] = rounds_sum_df[
+                #     "t_avg_flash_duration"
+                # ].astype(float)
                 rounds_sum_df.loc[idx, "t_avg_flash_duration"] = flash_agg.loc[
                     idx, "flash_duration"
                 ]["t_avg_flash_duration"]
@@ -207,27 +217,44 @@ def get_round_sum(dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
                 rounds_sum_df.loc[idx, "t_first_kill"] = int(
                     kill_stats.loc[idx, "is_first_kill"]["t_first_kill"]
                 )
+                # rounds_sum_df["ct_hs_prob"] = rounds_sum_df["ct_hs_prob"].astype(float)
                 rounds_sum_df.loc[idx, "ct_hs_prob"] = kill_stats.loc[
                     idx, "is_headshot"
                 ]["ct_hs_prob"]
+                # rounds_sum_df["t_hs_prob"] = rounds_sum_df["t_hs_prob"].astype(float)
                 rounds_sum_df.loc[idx, "t_hs_prob"] = kill_stats.loc[
                     idx, "is_headshot"
                 ]["t_hs_prob"]
+                # rounds_sum_df["ct_trade_prob"] = rounds_sum_df["ct_trade_prob"].astype(
+                #     float
+                # )
                 rounds_sum_df.loc[idx, "ct_trade_prob"] = kill_stats.loc[
                     idx, "is_trade"
                 ]["ct_trade_prob"]
+                # rounds_sum_df["t_trade_prob"] = rounds_sum_df["t_trade_prob"].astype(
+                #     float
+                # )
                 rounds_sum_df.loc[idx, "t_trade_prob"] = kill_stats.loc[
                     idx, "is_trade"
                 ]["t_trade_prob"]
+                # rounds_sum_df["ct_flash_kill_prob"] = rounds_sum_df[
+                #     "ct_flash_kill_prob"
+                # ].astype(float)
                 rounds_sum_df.loc[idx, "ct_flash_kill_prob"] = kill_stats.loc[
                     idx, "victim_blinded"
                 ]["ct_flash_kill_prob"]
+                # rounds_sum_df["t_flash_kill_prob"] = rounds_sum_df[
+                #     "t_flash_kill_prob"
+                # ].astype(float)
                 rounds_sum_df.loc[idx, "t_flash_kill_prob"] = kill_stats.loc[
                     idx, "victim_blinded"
                 ]["t_flash_kill_prob"]
                 rounds_sum_df.loc[idx, "ct_assist_prob"] = kill_stats.loc[
                     idx, "assister_steam_id"
                 ]["ct_assist_prob"]
+                # rounds_sum_df["t_assist_prob"] = rounds_sum_df["t_assist_prob"].astype(
+                #     float
+                # )
                 rounds_sum_df.loc[idx, "t_assist_prob"] = kill_stats.loc[
                     idx, "assister_steam_id"
                 ]["t_assist_prob"]
@@ -248,7 +275,13 @@ def get_round_sum(dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
                     0,
                 )
 
+                # rounds_sum_df["ct_kast_prob"] = rounds_sum_df["ct_kast_prob"].astype(
+                #     float
+                # )
                 rounds_sum_df.loc[idx, "ct_kast_prob"] = ct_kast / 5
+                # rounds_sum_df["t_kast_prob"] = rounds_sum_df["t_kast_prob"].astype(
+                #     float
+                # )
                 rounds_sum_df.loc[idx, "t_kast_prob"] = t_kast / 5
 
     # Process damages
