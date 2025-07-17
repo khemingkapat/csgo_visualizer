@@ -20,6 +20,7 @@
 
         pythonEnv = python.withPackages (
           ps: with ps; [
+            pip
             numpy
             pandas
             matplotlib
