@@ -286,7 +286,7 @@ def add_player_action(
         plt.get_cmap(cmap)(grad) for (cmap, grad) in zip(cmaps, normalized_grad)
     ]
 
-    colors = [f"rgba({mc[0]}, {mc[1]}, {mc[2]}, {alpha})" for mc in mapped_color]
+    colors = [f"rgba({mc[0]}, {mc[1]}, {mc[2]}, {1})" for mc in mapped_color]
 
     if marker_by is not None:
         fig.add_trace(
@@ -300,6 +300,7 @@ def add_player_action(
                     symbol="circle",
                     line=dict(width=1, color="white"),
                 ),
+                opacity=alpha,
                 name=f"{color_by} Background",
                 showlegend=False,  # Don't show in legend
                 hoverinfo="skip",  # Don't show hover for background
