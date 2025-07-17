@@ -168,8 +168,8 @@ def plot_community(fig: go.Figure, df: pd.DataFrame, alpha: float = 0.5):
                         ayref="y",
                         arrowhead=2,
                         arrowsize=1,
-                        arrowwidth=1.5,
+                        arrowwidth=2,
                         arrowcolor=color_hex,
-                        opacity=0.5,
+                        opacity=alpha,
                         standoff=5,
                     )
