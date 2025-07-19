@@ -102,3 +102,13 @@ def movement_page():
     Visualizer.plot_community(fig, cluster_df, alpha=community_alpha)
 
     st.plotly_chart(fig, use_container_width=True)
+    st.subheader("Explaination")
+    st.markdown(
+        """
+    This page might be a little confusing, but there is 2 main parts there.
+
+    1. **Big chaining arrows** (start with purple one and so on), is the main pushing direction of each team.
+
+    2. **Smaller arrows pointing to each shapes**, each shape correspond to size of group of player, showing the movement, splitting and joining of group of players throughout the match. You can try hovering on each shape to see the data.
+    """
+    )
