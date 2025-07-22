@@ -1,6 +1,6 @@
 import streamlit as st
 from parser import Parser
-from utils.components import upload_and_parse_json
+from utils.components import upload_and_parse_json, upload_and_parse_demo
 from preprocessor import Preprocessor
 import json
 from transformer import Transformer
@@ -66,6 +66,7 @@ def home_page():
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
         uploaded_data: dict = upload_and_parse_json(preview_limit=0)
+        uploaded_demo = upload_and_parse_demo(preview_limit=0)
 
     # Provide option to use sample data
     st.markdown("---")
@@ -93,6 +94,21 @@ def home_page():
         st.session_state.page = "overview"
         st.success("File successfully loaded! Redirecting to Overview page...")
         st.rerun()
+
+    if uploaded_demo is not None and uploaded_demo:
+        st.session_state.demo_data = uploaded_demo
+        with st.spinner("Processing data... This may take a moment."):
+            dfs = Parser.parse_demo_to_dfs(uploaded_demo)
+            print(dfs.keys())
+        #     st.session_state.clean_dfs = Preprocessor.preprocess_single_match(dfs)
+        #     with open(".awpy/maps/map-data.json", "r") as f:
+        #         all_map_data = json.load(f)
+        #     st.session_state.transformed_data = Transformer.transform_all_data(
+        #         st.session_state.clean_dfs, all_map_data
+        #     )
+        # st.session_state.page = "overview"
+        # st.success("File successfully loaded! Redirecting to Overview page...")
+        # st.rerun()
 
     # Footer with additional links and info
     st.markdown("---")
