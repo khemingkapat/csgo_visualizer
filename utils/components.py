@@ -1,5 +1,7 @@
 import streamlit as st
 import json
+import struct
+from typing import Dict, Any, Optional
 
 
 def upload_and_parse_json(preview_limit=10) -> dict:
@@ -45,3 +47,65 @@ def upload_and_parse_json(preview_limit=10) -> dict:
     else:
         st.info("📂 Please upload a JSON file.")
         return {}
+
+
+import streamlit as st
+import tempfile
+import os
+from awpy import Demo
+from typing import Optional
+
+
+def upload_and_parse_demo(preview_limit: int = 10) -> Optional[Demo]:
+    """
+    Streamlit widget to upload a CS demo file (.dem) and return awpy Demo object.
+    Args:
+        preview_limit (int): Number of items to preview in the UI.
+                             If 0, no preview is shown.
+    Returns:
+        awpy.Demo object if uploaded successfully, else None.
+    """
+    uploaded_file = st.file_uploader("Upload your CS Demo file", type="dem")
+
+    if uploaded_file is not None:
+        try:
+            # Read the file data
+            file_data = uploaded_file.read()
+
+            # Basic validation
+            if len(file_data) < 1072:
+                st.error("❌ File too small to be a valid demo file")
+                return None
+
+            # Create temporary file for awpy
+            with tempfile.NamedTemporaryFile(suffix=".dem", delete=False) as temp_file:
+                temp_file.write(file_data)
+                temp_path = temp_file.name
+
+            # Create Demo object
+            demo = Demo(temp_path)
+
+            # Clean up temporary file
+            os.unlink(temp_path)
+
+            st.success("✅ Demo file loaded successfully!")
+
+            # Show preview only if preview_limit > 0
+            if preview_limit > 0:
+                st.write(f"📄 Demo file: {uploaded_file.name}")
+                st.write(f"📊 Size: {len(file_data):,} bytes")
+
+            return demo
+
+        except Exception as e:
+            st.error(f"❌ Error loading demo file: {e}")
+            # Clean up temp file if it exists
+            if "temp_path" in locals():
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+            return None
+    else:
+        st.info("📂 Please upload a demo file.")
+        return None
