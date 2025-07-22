@@ -19,3 +19,13 @@ dependencies = [
     "scikit-learn>=1.7.1",
     "streamlit>=1.47.0",
 ]
+[tool.setuptools]
+packages = [
+    "page",
+    "parser",
+    "visualizer",
+    "sample_data",
+    "transformer",
+    "preprocessor"
+]
+
