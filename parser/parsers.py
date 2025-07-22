@@ -1,6 +1,9 @@
 import pandas as pd
 import re
 import datetime
+from awpy import Demo
+import polars as pl
+import inspect
 
 
 def get_top_level(data):
@@ -254,4 +257,69 @@ def parse_json_to_dfs(data: dict) -> dict[str, pd.DataFrame]:
             df = pd.DataFrame(value).drop_duplicates()
             df.columns = [camel_to_snake(col) for col in df.columns]
             result[key] = df
+    return result
+
+
+def is_dict_str_dataframe(data: dict) -> bool:
+    """
+    Checks if a dictionary conforms to the dict[str, pd.DataFrame] type.
+
+    Args:
+        data: The dictionary to check.
+
+    Returns:
+        True if the dictionary conforms to the type, False otherwise.
+    """
+    if not isinstance(data, dict):
+        return False
+
+    for key, value in data.items():
+        if not isinstance(key, str):
+            return False
+        if not isinstance(value, pl.DataFrame):
+            return False
+    return True
+
+
+def parse_demo_to_dfs(
+    demo: Demo,
+    skip: list[str] = [
+        "parser",
+        "path",
+        "inferno_duration",
+        "smoke_duration",
+        "in_play_ticks",
+        "default_events",
+        "detected_events",
+    ],
+) -> dict[str, pd.DataFrame]:
+    demo.parse()
+    print(dir(demo))
+    result = {}
+    other_data = {}
+    for attr in dir(demo):
+        print("-" * 50, attr, "-" * 50, sep="\n")
+        attr_obj = getattr(demo, attr)
+
+        if isinstance(attr_obj, pl.DataFrame) and attr not in skip:
+            result[attr] = attr_obj.to_pandas()
+
+        elif isinstance(attr_obj, dict) and is_dict_str_dataframe(attr_obj):
+            converted_dict = {k: v.to_pandas() for k, v in attr_obj.items()}
+            result.update(converted_dict)
+        elif (
+            not inspect.ismethod(attr_obj)
+            and not attr.startswith("_")
+            and attr not in skip
+        ):
+            if isinstance(attr_obj, dict):
+                other_data.update(attr_obj)
+            else:
+                other_data[attr] = attr_obj
+
+    print(other_data)
+    print(pd.DataFrame.from_dict(other_data, orient="index"))
+
+    for attr in result:
+        result[attr].columns = [col.lower() for col in result[attr].columns]
     return result
