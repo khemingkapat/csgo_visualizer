@@ -4,6 +4,7 @@ import datetime
 from awpy import Demo
 import polars as pl
 import inspect
+from awpy.stats import adr, kast, rating
 
 
 def get_top_level(data):
@@ -294,19 +295,19 @@ def parse_demo_to_dfs(
     ],
 ) -> dict[str, pd.DataFrame]:
     demo.parse()
-    print(dir(demo))
     result = {}
     other_data = {}
     for attr in dir(demo):
-        print("-" * 50, attr, "-" * 50, sep="\n")
         attr_obj = getattr(demo, attr)
 
         if isinstance(attr_obj, pl.DataFrame) and attr not in skip:
             result[attr] = attr_obj.to_pandas()
 
         elif isinstance(attr_obj, dict) and is_dict_str_dataframe(attr_obj):
-            converted_dict = {k: v.to_pandas() for k, v in attr_obj.items()}
-            result.update(converted_dict)
+            continue
+        # elif isinstance(attr_obj, dict) and is_dict_str_dataframe(attr_obj):
+        #     converted_dict = {k: v.to_pandas() for k, v in attr_obj.items()}
+        #     result.update(converted_dict)
         elif (
             not inspect.ismethod(attr_obj)
             and not attr.startswith("_")
@@ -317,8 +318,25 @@ def parse_demo_to_dfs(
             else:
                 other_data[attr] = attr_obj
 
-    print(other_data)
-    print(pd.DataFrame.from_dict(other_data, orient="index"))
+    result["other_data"] = pd.DataFrame.from_dict(other_data, orient="index").T
+
+    adr_df = adr(demo).to_pandas()
+    adr_df = adr_df.loc[:, ["steamid", "name", "n_rounds", "side", "dmg", "adr"]]
+
+    kast_df = kast(demo).to_pandas()
+    kast_df = kast_df.loc[:, ["steamid", "side", "kast"]]
+
+    rating_df = rating(demo).to_pandas()
+    rating_df = rating_df.loc[:, ["steamid", "side", "impact", "rating"]]
+
+    # Set index on each DataFrame first
+    adr_df = adr_df.set_index(["side", "steamid"])
+    kast_df = kast_df.set_index(["side", "steamid"])
+    rating_df = rating_df.set_index(["side", "steamid"])
+
+    # Join them together
+    stats_df = adr_df.join(kast_df, how="outer").join(rating_df, how="outer")
+    result["stats"] = stats_df
 
     for attr in result:
         result[attr].columns = [col.lower() for col in result[attr].columns]
