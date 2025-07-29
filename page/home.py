@@ -1,13 +1,18 @@
 import streamlit as st
 from parser import Parser
-from utils.components import upload_and_parse_json, upload_and_parse_demo
+from utils.components import (
+    upload_and_parse_json,
+    upload_and_parse_demo,
+    load_sample_demo,
+)
 from preprocessor import Preprocessor
 import json
 from transformer import Transformer
+import os
 
 
 def home_page():
-    st.title("CS:GO Match Analysis Dashboard")
+    st.title("CS2 Match Analysis Dashboard")
 
     # Add feedback toggle button in the top right
     col1, col2 = st.columns([6, 1])
@@ -50,13 +55,12 @@ def home_page():
     st.subheader("Upload Match Data")
     st.markdown(
         """
-        Welcome to the CS:GO Match Analysis Dashboard!
+        Welcome to the CS2 Match Analysis Dashboard!
         
-        This tool helps you analyze Counter-Strike: Global Offensive match data with detailed visualizations of player movements, kills, flashes, and grenades.
+        This tool helps you analyze Counter-Strike 2 match data with detailed visualizations of player movements, kills, smokes, infernos, and grenades.
         
-        To begin, you can either upload your own CS:GO match JSON file or try it out with a demo file below. 
+        To begin, you can either upload your own CS2 demo file, or start with our example demo
         
-        📁 More files are available at: [github.com/pnxenopoulos/esta](https://github.com/pnxenopoulos/esta)
         
         🔧 This project is under development at: [github.com/khemingkapat/csgo_visualizer](https://github.com/khemingkapat/csgo_visualizer)
         """
@@ -65,50 +69,41 @@ def home_page():
     # Center the upload button
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
-        uploaded_data: dict = upload_and_parse_json(preview_limit=0)
+        # uploaded_data: dict = upload_and_parse_json(preview_limit=0)
         uploaded_demo = upload_and_parse_demo(preview_limit=0)
 
     # Provide option to use sample data
     st.markdown("---")
     st.subheader("🎮 Try with Our Sample Data")
-    col1, col2, _ = st.columns([1, 1, 10])
+    col1, col2, _ = st.columns([1, 1, 5])
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)
+    sample_data_dir = os.path.join(project_root, "sample_data")
     with col1:
-        if st.button("🔥 Inferno"):
-            with open("sample_data/sample_inferno.json", "r") as f:
-                uploaded_data = json.load(f)
-    with col2:
-        if st.button("☢️ Nuke"):
-            with open("sample_data/sample_nuke.json", "r") as f:
-                uploaded_data = json.load(f)
-
-    if uploaded_data is not None and uploaded_data:
-        st.session_state.json_data = uploaded_data
-        with st.spinner("Processing data... This may take a moment."):
-            dfs = Parser.parse_json_to_dfs(uploaded_data)
-            st.session_state.clean_dfs = Preprocessor.preprocess_single_match(dfs)
-            with open(".awpy/maps/map-data.json", "r") as f:
-                all_map_data = json.load(f)
-            st.session_state.transformed_data = Transformer.transform_all_data(
-                st.session_state.clean_dfs, all_map_data
+        if st.button("Austin Major : Vitality vs. The Mongolz-Dust2"):
+            uploaded_demo = load_sample_demo(
+                f"{sample_data_dir}/vitality-vs-the-mongolz-m2-dust2.dem"
             )
-        st.session_state.page = "overview"
-        st.success("File successfully loaded! Redirecting to Overview page...")
-        st.rerun()
+
+    with col2:
+        if st.button("Austin Major : Vitality vs. The Mongolz-Inferno"):
+            uploaded_demo = load_sample_demo(
+                f"{sample_data_dir}/vitality-vs-the-mongolz-m3-inferno.dem"
+            )
 
     if uploaded_demo is not None and uploaded_demo:
         st.session_state.demo_data = uploaded_demo
         with st.spinner("Processing data... This may take a moment."):
-            dfs = Parser.parse_demo_to_dfs(uploaded_demo)
-            print(dfs.keys())
-        #     st.session_state.clean_dfs = Preprocessor.preprocess_single_match(dfs)
-        #     with open(".awpy/maps/map-data.json", "r") as f:
-        #         all_map_data = json.load(f)
-        #     st.session_state.transformed_data = Transformer.transform_all_data(
-        #         st.session_state.clean_dfs, all_map_data
-        #     )
-        # st.session_state.page = "overview"
-        # st.success("File successfully loaded! Redirecting to Overview page...")
-        # st.rerun()
+            st.session_state.parsed_demo = Parser.parse_demo_to_dfs(uploaded_demo)
+            st.session_state.clean_dfs = Preprocessor.preprocess_single_match(
+                st.session_state.parsed_demo
+            )
+            st.session_state.transformed_data = Transformer.transform_all_data(
+                st.session_state.clean_dfs
+            )
+        st.session_state.page = "overview"
+        st.success("File successfully loaded! Redirecting to Overview page...")
+        st.rerun()
 
     # Footer with additional links and info
     st.markdown("---")
@@ -119,7 +114,7 @@ def home_page():
                 📧 <a href='{google_form_url}' target='_blank'>Send Feedback</a> | 
                 🐛 <a href='{google_form_url}' target='_blank'>Report Bug</a> | 
                 ⭐ <a href='https://github.com/khemingkapat/csgo_visualizer' target='_blank'>Star us on GitHub</a> | 
-                📖 <a href='https://github.com/pnxenopoulos/esta' target='_blank'>CS:GO File Documentation</a>
+                📖 <a href='https://github.com/pnxenopoulos/awpy' target='_blank'>CS2 Demo Parser Documentation</a>
             </p>
         </div>
         """,
