@@ -5,7 +5,7 @@ from visualizer import Visualizer
 def action_page():
     st.title("Action Analysis")
 
-    if st.session_state.json_data is None:
+    if st.session_state.demo_data is None:
         st.warning("No data available. Please upload a file first.")
         st.session_state.page = "home"
         st.rerun()
@@ -19,9 +19,11 @@ def action_page():
 
     with match_col:
         # Match information
-        match_info = clean_dfs["matches"].iloc[0]
+        match_info = clean_dfs["other_data"].iloc[0]
         st.subheader("Match Information")
-        st.info(f"Map: {match_info['map_name']} | Date: {match_info['match_date']}")
+        st.info(
+            f"Map: {match_info['map_name']} | Date: {match_info['tournament_name']}"
+        )
 
     with round_col:
         # Round selection

@@ -6,7 +6,7 @@ from visualizer import Visualizer
 def movement_page():
     st.title("Movement Analysis")
 
-    if st.session_state.json_data is None:
+    if st.session_state.demo_data is None:
         st.warning("No data available. Please upload a file first.")
         st.session_state.page = "home"
         st.rerun()
@@ -24,9 +24,11 @@ def movement_page():
 
     with match_col:
         # Match information
-        match_info = clean_dfs["matches"].iloc[0]
+        match_info = clean_dfs["other_data"].iloc[0]
         st.subheader("Match Information")
-        st.info(f"Map: {match_info['map_name']} | Date: {match_info['match_date']}")
+        st.info(
+            f"Map: {match_info['map_name']} | Date: {match_info['tournament_name']}"
+        )
 
     with round_col:
         # Round selection
@@ -40,7 +42,9 @@ def movement_page():
 
     # Display round information
     round_info = clean_dfs["rounds"].loc[selected_round]
-    round_result = f"Winner: {round_info['winning_side'].upper()} | Reason: {round_info['round_end_reason']}"
+    round_result = (
+        f"Winner: {round_info['winner'].upper()} | Reason: {round_info['reason']}"
+    )
     st.info(round_result)
 
     # Get tick range for selected round
@@ -69,28 +73,31 @@ def movement_page():
         filtered_data=filtered_data,
         map_name=st.session_state.transformed_data["map"],
         show_loc=True,
-        show_flash=False,
+        show_smoke=False,
+        show_inferno=False,
         show_kills=False,
         show_grenades=False,
         loc_alpha=location_alpha,
-        flash_alpha=0,
+        smoke_alpha=0,
+        inferno_alpha=0,
         kill_alpha=0,
         grenade_alpha=0,
-        flash_size=0,
+        smoke_size=0,
+        inferno_size=0,
         kill_size=0,
         grenade_size=0,
         show_lines=False,
         fig_height=1200,
     )
     ct_df = Visualizer.get_side_df(
-        round_dfs["player_locations"], sampling_rate=sampling_rate
+        round_dfs["player_locations"], sampling_rate=sampling_rate, side="ct"
     )
     tpca_result_ct = Visualizer.temporal_pca(ct_df)
     chained_vecs_ct = Visualizer.chain_pc_vectors(tpca_result_ct)
     Visualizer.plot_chained_vector(fig, chained_vecs_ct, alpha=vector_alpha)
 
     t_df = Visualizer.get_side_df(
-        round_dfs["player_locations"], sampling_rate=10, side="T"
+        round_dfs["player_locations"], sampling_rate=10, side="t"
     )
     tpca_result_t = Visualizer.temporal_pca(t_df)
     chained_vecs_t = Visualizer.chain_pc_vectors(tpca_result_t)
