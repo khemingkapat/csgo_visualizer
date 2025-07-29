@@ -8,7 +8,7 @@ from utils.functions import angle_between_vectors, eu_dist
 
 
 def get_side_df(
-    tf_loc: pd.DataFrame, side: str = "CT", sampling_rate: int = 20
+    tf_loc: pd.DataFrame, side: str = "ct", sampling_rate: int = 20
 ) -> pd.DataFrame:
     # tf_loc = transformed_loc.loc[:, ["tick", "side", "steam_id", "x", "y"]]
     all_ticks = np.array(sorted(tf_loc["tick"].unique())[::sampling_rate])
@@ -16,7 +16,7 @@ def get_side_df(
     raw_loc_df = tf_loc[tf_loc.side == side].reset_index().drop(["round_num"], axis=1)
 
     # Create player encoding dictionary
-    unique_players = sorted(raw_loc_df.steam_id.unique())
+    unique_players = sorted(raw_loc_df.steamid.unique())
     player_encode = {steam_id: i for i, steam_id in enumerate(unique_players, start=1)}
 
     # Create column names based on player encoding
@@ -34,7 +34,7 @@ def get_side_df(
 
         # Fill coordinates according to player encoding
         for _, row in tick_data.iterrows():
-            player_num = player_encode[row["steam_id"]]
+            player_num = player_encode[row["steamid"]]
             p_coords[(player_num - 1) * 2] = row["x"]  # x coordinate
             p_coords[(player_num - 1) * 2 + 1] = row["y"]  # y coordinate
 
