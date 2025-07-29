@@ -6,6 +6,7 @@ def filter_data_by_tick(
 ) -> dict[str, pd.DataFrame]:
     """Filter all dataframes by tick range"""
     filtered_data = {}
+    skip = [pd.NA]
 
     # Filter locations
     if "player_locations" in round_dfs and len(round_dfs["player_locations"]) > 0:
@@ -25,6 +26,23 @@ def filter_data_by_tick(
     else:
         filtered_data["flashes"] = pd.DataFrame()
 
+    if "smokes" in round_dfs and len(round_dfs["smokes"]) > 0:
+        skip.append("CSmokeGrenadeProjectile")
+        smoke_mask = (round_dfs["smokes"]["start_tick"] >= min_tick) & (
+            round_dfs["smokes"]["start_tick"] <= max_tick
+        )
+        filtered_data["smokes"] = round_dfs["smokes"][smoke_mask]
+    else:
+        filtered_data["smokes"] = pd.DataFrame()
+    if "infernos" in round_dfs and len(round_dfs["infernos"]) > 0:
+        skip.append("CMolotovProjectile")
+        inferno_mask = (round_dfs["infernos"]["start_tick"] >= min_tick) & (
+            round_dfs["infernos"]["start_tick"] <= max_tick
+        )
+        filtered_data["infernos"] = round_dfs["infernos"][inferno_mask]
+    else:
+        filtered_data["infernos"] = pd.DataFrame()
+
     # Filter kills
     if "kills" in round_dfs and len(round_dfs["kills"]) > 0:
         kill_mask = (round_dfs["kills"]["tick"] >= min_tick) & (
@@ -36,21 +54,30 @@ def filter_data_by_tick(
 
     # Filter grenades
     if "grenades" in round_dfs and len(round_dfs["grenades"]) > 0:
-        grenade_mask = (round_dfs["grenades"]["throw_tick"] >= min_tick) & (
-            round_dfs["grenades"]["throw_tick"] <= max_tick
+
+        grenade_mask = (
+            (round_dfs["grenades"]["throw_tick"] >= min_tick)
+            & (round_dfs["grenades"]["throw_tick"] <= max_tick)
+            & ~round_dfs["grenades"]["type"].isin(skip)
         )
         filtered_data["grenades"] = round_dfs["grenades"][grenade_mask]
     else:
         filtered_data["grenades"] = pd.DataFrame()
 
     # Filter line data
-    line_filters = ["flash_lines", "kill_lines", "grenade_lines"]
-    tick_columns = ["tick", "tick", "throw_tick"]
+    line_filters = ["smoke_lines", "inferno_lines", "kill_lines", "grenade_lines"]
+    tick_columns = ["start_tick", "start_tick", "tick", "throw_tick"]
 
     for line_type, tick_col in zip(line_filters, tick_columns):
         if line_type in round_dfs and len(round_dfs[line_type]) > 0:
-            line_mask = (round_dfs[line_type][tick_col] >= min_tick) & (
-                round_dfs[line_type][tick_col] <= max_tick
+            if "grenade_type" in round_dfs[line_type].columns:
+                skip_mask = ~round_dfs[line_type]["grenade_type"].isin(skip)
+            else:
+                skip_mask = True
+            line_mask = (
+                (round_dfs[line_type][tick_col] >= min_tick)
+                & (round_dfs[line_type][tick_col] <= max_tick)
+                & skip_mask
             )
             filtered_data[line_type] = round_dfs[line_type][line_mask]
         else:
