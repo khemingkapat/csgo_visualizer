@@ -1,10 +1,14 @@
 image_dim = 1024
-side_color = {"CT": "Blues", "T": "Reds"}
+side_color = {"ct": "Blues", "t": "Reds"}
 
-flash_marker = {
-    "flasher": "✨",
-    "flashee": "😎",
-    "both": "😉",
+smoke_marker = {
+    "thrower": "🚬",
+    "smoke": "💨",
+}
+
+inferno_marker = {
+    "thrower": "🌞",
+    "inferno": "🔥",
 }
 
 kill_marker = {
