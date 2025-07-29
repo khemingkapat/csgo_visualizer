@@ -10,10 +10,11 @@ def plot_location_change_analysis(
 
     # Create subplots with 3 rows and 1 column
     fig = make_subplots(
-        rows=3,
+        rows=4,
         cols=1,
         subplot_titles=[
-            "<b>Location Change with Flash</b>",
+            "<b>Location Change with Smoke</b>",
+            "<b>Location Change with Inferno</b>",
             "<b>Location Change with Kills</b>",
             "<b>Location Change with Grenade</b>",
         ],
@@ -22,7 +23,7 @@ def plot_location_change_analysis(
     )
 
     # Preprocessing: Location Change
-    sel_loc = dfs["player_frames"].loc[round_num][["tick", "side", "x", "y"]].copy()
+    sel_loc = dfs["ticks"].loc[round_num][["tick", "side", "x", "y"]].copy()
     curr_x = sel_loc.iloc[1:]["x"].values
     prev_x = sel_loc.iloc[:-1]["x"].values
     curr_y = sel_loc.iloc[1:]["y"].values
@@ -33,15 +34,15 @@ def plot_location_change_analysis(
         avg_loc_change=("loc_change", "mean")
     )
 
-    ct_loc_df = sel_team_loc.loc["CT"].reset_index()
-    t_loc_df = sel_team_loc.loc["T"].reset_index()
+    ct_loc_df = sel_team_loc.loc["ct"].reset_index()
+    t_loc_df = sel_team_loc.loc["t"].reset_index()
 
     # Colors - bright colors for dark theme
     ct_color = "rgba(0, 150, 255, 1)"
     t_color = "rgba(255, 80, 80, 1)"
 
     # Add traces for all three subplots - Team location changes
-    for i in range(1, 4):
+    for i in range(1, 5):
         # CT Location Change
         fig.add_trace(
             go.Scatter(
@@ -74,7 +75,7 @@ def plot_location_change_analysis(
 
     # Get y-axis ranges for proper vertical line scaling
     y_ranges = []
-    for i in range(1, 4):
+    for i in range(1, 5):
         max_ct = max(ct_loc_df["avg_loc_change"])
         max_t = max(t_loc_df["avg_loc_change"])
         y_max = max(max_ct, max_t) * 1.1  # Add some padding
@@ -82,147 +83,190 @@ def plot_location_change_analysis(
 
         fig.update_yaxes(range=[0, y_max], row=i, col=1)
 
-    # Subplot 1: Add Flash events - each to its specific subplot
-    sel_f = dfs["flashes"].loc[round_num].reset_index()
+    # Smokes
 
-    flash_events = []
-    for attacker_side in ["CT", "T"]:
-        flash_ticks = sel_f[sel_f.attacker_side == attacker_side]["tick"]
-        color = (
-            "rgba(0, 150, 255, 0.8)"
-            if attacker_side == "CT"
-            else "rgba(255, 80, 80, 0.8)"
-        )
-
-        if len(flash_ticks) > 0:
-            flash_events.append(
-                {"side": attacker_side, "ticks": flash_ticks, "color": color}
+    if "smokes" in dfs and not dfs["smokes"].empty:
+        sel_s = dfs["smokes"].loc[round_num].reset_index()
+        smoke_events = []
+        for attacker_side in ["ct", "t"]:
+            smoke_ticks = sel_s[sel_s.thrower_side == attacker_side]["start_tick"]
+            color = (
+                "rgba(0, 150, 255, 0.8)"
+                if attacker_side == "ct"
+                else "rgba(255, 80, 80, 0.8)"
             )
+            if len(smoke_ticks) > 0:
+                smoke_events.append(
+                    {"side": attacker_side, "ticks": smoke_ticks, "color": color}
+                )
+                # Add a single legend item for each side's smokes
+                fig.add_trace(
+                    go.Scatter(
+                        x=[None],
+                        y=[None],
+                        mode="lines",
+                        line=dict(color=color, width=2, dash="dash"),
+                        name=f"{attacker_side} Smoke",
+                        legendgroup=f"{attacker_side}_smoke",
+                        showlegend=True,
+                    ),
+                    row=1,
+                    col=1,
+                )
+        # Add vertical lines for smokes
+        for event in smoke_events:
+            for tick_value in event["ticks"]:
+                fig.add_shape(
+                    type="line",
+                    x0=tick_value,
+                    x1=tick_value,
+                    y0=0,
+                    y1=y_ranges[0][1],
+                    line=dict(color=event["color"], width=1.5, dash="dash"),
+                    row=1,
+                    col=1,
+                )
 
-            # Add a single legend item for each side's flashes
-            fig.add_trace(
-                go.Scatter(
-                    x=[None],
-                    y=[None],
-                    mode="lines",
-                    line=dict(color=color, width=2, dash="dash"),
-                    name=f"{attacker_side} Flash",
-                    legendgroup=f"{attacker_side}_flash",
-                    showlegend=True,
-                ),
-                row=1,
-                col=1,
+    # Infernos
+    if "infernos" in dfs and not dfs["infernos"].empty:
+        sel_i = dfs["infernos"].loc[round_num].reset_index()
+        inferno_events = []
+        for attacker_side in ["ct", "t"]:
+            inferno_ticks = sel_i[sel_i.thrower_side == attacker_side]["start_tick"]
+            color = (
+                "rgba(0, 150, 255, 0.8)"
+                if attacker_side == "ct"
+                else "rgba(255, 80, 80, 0.8)"
             )
-
-    # Add vertical lines for flashes
-    for event in flash_events:
-        for tick_value in event["ticks"]:
-            fig.add_shape(
-                type="line",
-                x0=tick_value,
-                x1=tick_value,
-                y0=0,
-                y1=y_ranges[0][1],
-                line=dict(color=event["color"], width=1.5, dash="dash"),
-                row=1,
-                col=1,
-            )
+            if len(inferno_ticks) > 0:
+                inferno_events.append(
+                    {"side": attacker_side, "ticks": inferno_ticks, "color": color}
+                )
+                # Add a single legend item for each side's infernos
+                fig.add_trace(
+                    go.Scatter(
+                        x=[None],
+                        y=[None],
+                        mode="lines",
+                        line=dict(color=color, width=2, dash="dash"),
+                        name=f"{attacker_side} Inferno",
+                        legendgroup=f"{attacker_side}_inferno",
+                        showlegend=True,
+                    ),
+                    row=2,
+                    col=1,
+                )
+        # Add vertical lines for infernos
+        for event in inferno_events:
+            for tick_value in event["ticks"]:
+                fig.add_shape(
+                    type="line",
+                    x0=tick_value,
+                    x1=tick_value,
+                    y0=0,
+                    y1=y_ranges[0][1],
+                    line=dict(color=event["color"], width=1.5, dash="dash"),
+                    row=2,
+                    col=1,
+                )
 
     # Subplot 2: Add Kill events
-    sel_k = dfs["kills"].loc[round_num].reset_index()
+    if "kills" in dfs and not dfs["kills"].empty:
+        sel_k = dfs["kills"].loc[round_num].reset_index()
 
-    kill_events = []
-    for attacker_side in ["CT", "T"]:
-        kill_ticks = sel_k[sel_k.attacker_side == attacker_side]["tick"]
-        color = (
-            "rgba(200, 0, 200, 0.8)"
-            if attacker_side == "CT"
-            else "rgba(255, 200, 0, 0.8)"
-        )
-
-        if len(kill_ticks) > 0:
-            kill_events.append(
-                {"side": attacker_side, "ticks": kill_ticks, "color": color}
+        kill_events = []
+        for attacker_side in ["ct", "t"]:
+            kill_ticks = sel_k[sel_k.attacker_side == attacker_side]["tick"]
+            color = (
+                "rgba(200, 0, 200, 0.8)"
+                if attacker_side == "ct"
+                else "rgba(255, 200, 0, 0.8)"
             )
 
-            # Add a single legend item for each side's kills
-            fig.add_trace(
-                go.Scatter(
-                    x=[None],
-                    y=[None],
-                    mode="lines",
-                    line=dict(color=color, width=2, dash="dash"),
-                    name=f"{attacker_side} Kill",
-                    legendgroup=f"{attacker_side}_kill",
-                    showlegend=True,
-                ),
-                row=2,
-                col=1,
-            )
+            if len(kill_ticks) > 0:
+                kill_events.append(
+                    {"side": attacker_side, "ticks": kill_ticks, "color": color}
+                )
 
-    # Add vertical lines for kills
-    for event in kill_events:
-        for tick_value in event["ticks"]:
-            fig.add_shape(
-                type="line",
-                x0=tick_value,
-                x1=tick_value,
-                y0=0,
-                y1=y_ranges[1][1],
-                line=dict(color=event["color"], width=1.5, dash="dash"),
-                row=2,
-                col=1,
-            )
+                # Add a single legend item for each side's kills
+                fig.add_trace(
+                    go.Scatter(
+                        x=[None],
+                        y=[None],
+                        mode="lines",
+                        line=dict(color=color, width=2, dash="dash"),
+                        name=f"{attacker_side} Kill",
+                        legendgroup=f"{attacker_side}_kill",
+                        showlegend=True,
+                    ),
+                    row=3,
+                    col=1,
+                )
+
+        # Add vertical lines for kills
+        for event in kill_events:
+            for tick_value in event["ticks"]:
+                fig.add_shape(
+                    type="line",
+                    x0=tick_value,
+                    x1=tick_value,
+                    y0=0,
+                    y1=y_ranges[1][1],
+                    line=dict(color=event["color"], width=1.5, dash="dash"),
+                    row=3,
+                    col=1,
+                )
 
     # Subplot 3: Add Grenade events
-    sel_g = dfs["grenades"].loc[round_num].reset_index()
+    if "grenades" in dfs and not dfs["grenades"].empty:
+        sel_g = dfs["grenades"].loc[round_num].reset_index()
 
-    grenade_events = []
-    for thrower_side in ["CT", "T"]:
-        grenade_ticks = sel_g[sel_g.thrower_side == thrower_side]["throw_tick"]
-        color = (
-            "rgba(255, 105, 180, 0.8)"
-            if thrower_side == "CT"
-            else "rgba(0, 255, 255, 0.8)"
-        )
-
-        if len(grenade_ticks) > 0:
-            grenade_events.append(
-                {"side": thrower_side, "ticks": grenade_ticks, "color": color}
+        grenade_events = []
+        for thrower_side in ["ct", "t"]:
+            grenade_ticks = sel_g[sel_g.thrower_side == thrower_side]["throw_tick"]
+            color = (
+                "rgba(255, 105, 180, 0.8)"
+                if thrower_side == "ct"
+                else "rgba(0, 255, 255, 0.8)"
             )
 
-            # Add a single legend item for each side's grenades
-            fig.add_trace(
-                go.Scatter(
-                    x=[None],
-                    y=[None],
-                    mode="lines",
-                    line=dict(color=color, width=2, dash="dash"),
-                    name=f"{thrower_side} Grenade",
-                    legendgroup=f"{thrower_side}_grenade",
-                    showlegend=True,
-                ),
-                row=3,
-                col=1,
-            )
+            if len(grenade_ticks) > 0:
+                grenade_events.append(
+                    {"side": thrower_side, "ticks": grenade_ticks, "color": color}
+                )
 
-    # Add vertical lines for grenades
-    for event in grenade_events:
-        for tick_value in event["ticks"]:
-            fig.add_shape(
-                type="line",
-                x0=tick_value,
-                x1=tick_value,
-                y0=0,
-                y1=y_ranges[2][1],
-                line=dict(color=event["color"], width=1.5, dash="dash"),
-                row=3,
-                col=1,
-            )
+                # Add a single legend item for each side's grenades
+                fig.add_trace(
+                    go.Scatter(
+                        x=[None],
+                        y=[None],
+                        mode="lines",
+                        line=dict(color=color, width=2, dash="dash"),
+                        name=f"{thrower_side} Grenade",
+                        legendgroup=f"{thrower_side}_grenade",
+                        showlegend=True,
+                    ),
+                    row=4,
+                    col=1,
+                )
+
+        # Add vertical lines for grenades
+        for event in grenade_events:
+            for tick_value in event["ticks"]:
+                fig.add_shape(
+                    type="line",
+                    x0=tick_value,
+                    x1=tick_value,
+                    y0=0,
+                    y1=y_ranges[2][1],
+                    line=dict(color=event["color"], width=1.5, dash="dash"),
+                    row=4,
+                    col=1,
+                )
 
     # Update layout with dark theme
     fig.update_layout(
-        height=800,
+        height=1000,
         width=900,
         title=dict(
             text=f"Location Change Analysis - Round {round_num}",
