@@ -58,7 +58,7 @@ class Visualizer:
     def apply_cluster_community(
         transformed_loc: pd.DataFrame, sampling_rate: int = 20
     ) -> pd.DataFrame:
-        tf_loc = transformed_loc.loc[:, ["tick", "side", "steam_id", "x", "y"]]
+        tf_loc = transformed_loc.loc[:, ["tick", "side", "steamid", "x", "y"]]
         clustered_players_df = Visualizer.cluster_player_communities(
             tf_loc, sampling_rate=sampling_rate
         )
