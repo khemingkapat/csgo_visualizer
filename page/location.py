@@ -6,7 +6,7 @@ from visualizer import Visualizer
 def location_page():
     st.title("Location Analysis")
 
-    if st.session_state.json_data is None:
+    if st.session_state.demo_data is None:
         st.warning("No data available. Please upload a file first.")
         st.session_state.page = "home"
         st.rerun()
@@ -24,9 +24,11 @@ def location_page():
 
     with match_col:
         # Match information
-        match_info = clean_dfs["matches"].iloc[0]
+        match_info = clean_dfs["other_data"].iloc[0]
         st.subheader("Match Information")
-        st.info(f"Map: {match_info['map_name']} | Date: {match_info['match_date']}")
+        st.info(
+            f"Map: {match_info['map_name']} | Date: {match_info['tournament_name']}"
+        )
 
     with round_col:
         # Round selection
@@ -40,7 +42,9 @@ def location_page():
 
     # Display round information
     round_info = clean_dfs["rounds"].loc[selected_round]
-    round_result = f"Winner: {round_info['winning_side'].upper()} | Reason: {round_info['round_end_reason']}"
+    round_result = (
+        f"Winner: {round_info['winner'].upper()} | Reason: {round_info['reason']}"
+    )
     st.info(round_result)
 
     # Get tick range for selected round
@@ -68,7 +72,8 @@ def location_page():
     # Event visibility controls
     st.sidebar.subheader("Event Types")
     show_loc = st.sidebar.checkbox("Show Location", value=True)
-    show_flash = st.sidebar.checkbox("Show Flashes", value=True)
+    show_smoke = st.sidebar.checkbox("Show Smokes", value=True)
+    show_inferno = st.sidebar.checkbox("Show Infernos", value=True)
     show_kills = st.sidebar.checkbox("Show Kills", value=True)
     show_grenades = st.sidebar.checkbox("Show Grenades", value=True)
     show_lines = st.sidebar.checkbox("Show Lines", value=True)
@@ -79,13 +84,15 @@ def location_page():
 
         with col1:
             st.subheader("Opacity")
-            flash_alpha = st.slider("Flash Alpha", 0.1, 1.0, 0.7)
+            smoke_alpha = st.slider("Smoke Alpha", 0.1, 1.0, 0.7)
+            inferno_alpha = st.slider("Inferno Alpha", 0.1, 1.0, 0.7)
             kill_alpha = st.slider("Kill Alpha", 0.1, 1.0, 0.7)
             grenade_alpha = st.slider("Grenade Alpha", 0.1, 1.0, 0.7)
 
         with col2:
             st.subheader("Size")
-            flash_size = 30 + int(st.checkbox("Big Flash", value=False)) * 20
+            smoke_size = 30 + int(st.checkbox("Big Smoke", value=False)) * 20
+            inferno_size = 30 + int(st.checkbox("Big Inferno", value=False)) * 20
             kill_size = 30 + int(st.checkbox("Big Kill", value=False)) * 20
             grenade_size = 30 + int(st.checkbox("Big Grenade", value=False)) * 20
 
@@ -97,14 +104,17 @@ def location_page():
         filtered_data=filtered_data,
         map_name=st.session_state.transformed_data["map"],
         show_loc=show_loc,
-        show_flash=show_flash,
+        show_smoke=show_smoke,
+        show_inferno=show_inferno,
         show_kills=show_kills,
         show_grenades=show_grenades,
         loc_alpha=0.5,
-        flash_alpha=flash_alpha,
+        smoke_alpha=smoke_alpha,
+        inferno_alpha=inferno_alpha,
         kill_alpha=kill_alpha,
         grenade_alpha=grenade_alpha,
-        flash_size=flash_size,
+        smoke_size=smoke_size,
+        inferno_size=inferno_size,
         kill_size=kill_size,
         grenade_size=grenade_size,
         show_lines=show_lines,
@@ -118,78 +128,59 @@ def location_page():
     with st.expander("Round Statistics", expanded=False):
         st.subheader(f"Statistics for Round {selected_round}")
 
-        # Filter actions by max tick for statistics
-        flash_mask = (round_dfs["flashes"]["tick"] >= 0) & (
-            round_dfs["flashes"]["tick"] <= max_tick
-        )
-        kill_mask = (round_dfs["kills"]["tick"] >= 0) & (
-            round_dfs["kills"]["tick"] <= max_tick
-        )
-        grenade_mask = (round_dfs["grenades"]["throw_tick"] >= 0) & (
-            round_dfs["grenades"]["throw_tick"] <= max_tick
-        )
-
-        filtered_flash = (
-            round_dfs["flashes"][flash_mask][
-                round_dfs["flashes"][flash_mask].status.isin(["flahser", "both"])
-            ]
-            if isinstance(round_dfs["flashes"], pd.DataFrame)
-            else pd.DataFrame()
-        )
-        filtered_kills = (
-            round_dfs["kills"][kill_mask][
-                round_dfs["kills"][kill_mask].status.isin(["attacker", "suicide"])
-            ]
-            if isinstance(round_dfs["kills"], pd.DataFrame)
-            else pd.DataFrame()
-        )
-        filtered_grenades = (
-            round_dfs["grenades"][grenade_mask]
-            if isinstance(round_dfs["grenades"], pd.DataFrame)
-            else pd.DataFrame()
-        )
-
-        # Display basic statistics - use more columns in full width
-        col1, col2, col3 = st.columns(3)
-
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric(
-                "Flashes",
+                "Smoke",
                 (
-                    len(filtered_flash)
-                    if isinstance(filtered_flash, pd.DataFrame)
+                    len(filtered_data["smokes"])
+                    if isinstance(filtered_data["smokes"], pd.DataFrame)
                     else 0
                 ),
             )
-            if not filtered_flash.empty:
-                st.write("Flash Distribution:")
-                side_counts = filtered_flash["attacker_side"].value_counts()
+            if not filtered_data["smokes"].empty:
+                st.write("Smoke Distribution:")
+                side_counts = filtered_data["smokes"]["thrower_side"].value_counts()
                 st.bar_chart(side_counts, use_container_width=True)
 
         with col2:
             st.metric(
                 "Kills",
                 (
-                    len(filtered_kills)
-                    if isinstance(filtered_kills, pd.DataFrame)
+                    len(filtered_data["kills"])
+                    if isinstance(filtered_data["kills"], pd.DataFrame)
                     else 0
                 ),
             )
-            if not filtered_kills.empty:
+            if not filtered_data["kills"].empty:
                 st.write("Kill Distribution:")
-                side_counts = filtered_kills["attacker_side"].value_counts()
+                side_counts = filtered_data["kills"]["attacker_side"].value_counts()
                 st.bar_chart(side_counts, use_container_width=True)
 
         with col3:
             st.metric(
                 "Grenades",
                 (
-                    len(filtered_grenades) / 2
-                    if isinstance(filtered_grenades, pd.DataFrame)
+                    len(filtered_data["grenades"])
+                    if isinstance(filtered_data["grenades"], pd.DataFrame)
                     else 0
                 ),
             )
-            if not filtered_grenades.empty:
+            if not filtered_data["grenades"].empty:
                 st.write("Grenade Distribution:")
-                side_counts = filtered_grenades["thrower_side"].value_counts()
+                side_counts = filtered_data["grenades"]["thrower_side"].value_counts()
+                st.bar_chart(side_counts, use_container_width=True)
+
+        with col4:
+            st.metric(
+                "Infernos",
+                (
+                    len(filtered_data["infernos"])
+                    if isinstance(filtered_data["infernos"], pd.DataFrame)
+                    else 0
+                ),
+            )
+            if not filtered_data["infernos"].empty:
+                st.write("Inferno Distribution:")
+                side_counts = filtered_data["infernos"]["thrower_side"].value_counts()
                 st.bar_chart(side_counts, use_container_width=True)
