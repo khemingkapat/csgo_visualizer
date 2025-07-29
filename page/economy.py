@@ -5,7 +5,7 @@ from visualizer import Visualizer
 def economy_page():
     st.title("Economy Analysis")
 
-    if st.session_state.json_data is None:
+    if st.session_state.demo_data is None:
         st.warning("No data available. Please upload a file first.")
         st.session_state.page = "home"
         st.rerun()
