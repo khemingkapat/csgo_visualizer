@@ -34,14 +34,17 @@ def create_plotly_actions_plot(
     filtered_data: dict[str, pd.DataFrame],
     map_name: str,
     show_loc: bool = True,
-    show_flash: bool = True,
+    show_smoke: bool = True,
+    show_inferno: bool = True,
     show_kills: bool = True,
     show_grenades: bool = True,
     loc_alpha=0.5,
-    flash_alpha: float = 0.7,
+    smoke_alpha: float = 0.7,
+    inferno_alpha: float = 0.7,
     kill_alpha: float = 0.7,
     grenade_alpha: float = 0.7,
-    flash_size: int = 10,
+    smoke_size: int = 10,
+    inferno_size: int = 10,
     kill_size: int = 10,
     grenade_size: int = 10,
     show_lines: bool = True,
@@ -98,28 +101,52 @@ def create_plotly_actions_plot(
         )
 
     # Add flashes
-    if show_flash and len(filtered_data["flashes"]) > 0:
-        legendgroup = "Flashes"
+    if show_smoke and len(filtered_data["smokes"]) > 0:
+        legendgroup = "Smoke"
         add_player_action(
             fig,
-            filtered_data["flashes"],
-            size=flash_size,
-            alpha=flash_alpha,
-            gradient_by="tick",
+            filtered_data["smokes"],
+            size=smoke_size,
+            alpha=smoke_alpha,
+            gradient_by="start_tick",
             color_by="side",
             color_dict=side_color,
             marker_by="status",
-            marker_dict=flash_marker,
+            marker_dict=smoke_marker,
             legendgroup=legendgroup,
         )
 
-        if show_lines and len(filtered_data["flash_lines"]) > 0:
+        if show_lines and len(filtered_data["smoke_lines"]) > 0:
             add_action_connection(
                 fig,
-                filtered_data["flash_lines"],
-                st1="attacker",
-                st2="player",
-                gradient_by="tick",
+                filtered_data["smoke_lines"],
+                st1="thrower",
+                st2="smoke",
+                gradient_by="start_tick",
+                legendgroup=legendgroup,
+            )
+    if show_inferno and len(filtered_data["infernos"]) > 0:
+        legendgroup = "Infernos"
+        add_player_action(
+            fig,
+            filtered_data["infernos"],
+            size=inferno_size,
+            alpha=inferno_alpha,
+            gradient_by="start_tick",
+            color_by="side",
+            color_dict=side_color,
+            marker_by="status",
+            marker_dict=inferno_marker,
+            legendgroup=legendgroup,
+        )
+
+        if show_lines and len(filtered_data["inferno_lines"]) > 0:
+            add_action_connection(
+                fig,
+                filtered_data["inferno_lines"],
+                st1="thrower",
+                st2="inferno",
+                gradient_by="start_tick",
                 legendgroup=legendgroup,
             )
     # Add kills
@@ -136,6 +163,7 @@ def create_plotly_actions_plot(
             marker_by="status",
             marker_dict=kill_marker,
             legendgroup=legendgroup,
+            additional_data="name",
         )
 
         if show_lines and len(filtered_data["kill_lines"]) > 0:
@@ -162,6 +190,7 @@ def create_plotly_actions_plot(
             marker_by="status",
             marker_dict=grenade_marker,
             legendgroup=legendgroup,
+            additional_data="type",
         )
 
         if show_lines and len(filtered_data["grenade_lines"]) > 0:
@@ -265,6 +294,7 @@ def add_player_action(
     marker_dict: dict[str, str] = {},
     default_marker: str = "\u2b24",  # Default marker when marker_by is None
     legendgroup: str | None = None,
+    additional_data: str = "",
 ):
     if df.empty:
         return
@@ -319,11 +349,15 @@ def add_player_action(
                 size=size,
             ),
             opacity=alpha,
-            hovertemplate=f"<br>"
-            + "X: %{x}<br>"
-            + "Y: %{y}<br>"
-            + "Tick: %{customdata}<extra></extra>",
-            customdata=df[gradient_by],
+            hovertemplate=(
+                f"<br>"
+                + "X: %{x}<br>"
+                + "Y: %{y}<br>"
+                + "Tick: %{customdata[0]}<br>"
+                + ("Info: %{customdata[1]}" if additional_data else "")
+                + "<extra></extra>"
+            ),
+            customdata=df[[gradient_by] + [additional_data] * bool(additional_data)],
             showlegend=True,
             legendgroup=legendgroup,
             name=legendgroup,
