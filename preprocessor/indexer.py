@@ -9,20 +9,16 @@ def index_dfs(
 
     if include is None:
         include = [
-            "player_frames",
-            "flashes",
-            "smokes",
+            "bomb",
             "damages",
+            "footsteps",
+            "grenades",
+            "infernos",
             "kills",
             "rounds",
-            "frames",
-            "grenades",
-            "weapon_fires",
-            "team_frames",
-            "inventory",
-            "bomb_location",
-            "projectiles",
-            "fires",
+            "shots",
+            "smokes",
+            "ticks",
         ]
     if index_by is None:
         index_by = ["match_id", "round_num"]
