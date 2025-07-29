@@ -6,7 +6,7 @@ def plot_round_timeline_plotly(df: pd.DataFrame) -> go.Figure:
     colors = [
         "skyblue" if row["ct_win"] == 1 else "lightcoral" for _, row in df.iterrows()
     ]
-    labels = df["round_end_reason"]
+    labels = df["reason"]
     rounds = df["round_num"]
 
     fig = go.Figure()
