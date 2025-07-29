@@ -11,16 +11,16 @@ def _get_value_difference(round_sum: pd.DataFrame) -> pd.DataFrame:
 
     # Select relevant features
     features_to_compare = round_sum.columns.to_list()
-    for col in ["bomb_plant_tick", "winning_side"]:
+    for col in ["bomb_plant", "winning_side", "winner"]:
         if col in features_to_compare:
             features_to_compare.remove(col)
 
     features_to_compare = [
-        col for col in features_to_compare if not col.startswith("round_end_reason")
+        col for col in features_to_compare if not col.startswith("reason")
     ]
 
     # Calculate percentage difference
-    percentage_df = pd.DataFrame()
+    percentage_df = pd.DataFrame(columns=np.array(["%diff"]))
     for feature in features_to_compare:
         t_mean = t_win_df[feature].mean()
         ct_mean = ct_win_df[feature].mean()

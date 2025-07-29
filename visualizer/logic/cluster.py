@@ -43,14 +43,14 @@ def cluster_player_communities(
     # --- Loop through each tick ---
     for tick in all_ticks:
         tick_df = tf_loc[tf_loc["tick"] == tick].copy()
-        players_in_tick = np.unique(tick_df["steam_id"])
+        players_in_tick = np.unique(tick_df["steamid"])
 
         # --- Prepare edge data for igraph.Graph.TupleList ---
         # Store (source_steam_id, target_steam_id, weight) tuples
         edges_and_weights_for_igraph = []
 
         pos_data = (
-            tick_df.set_index("steam_id").loc[:, ["x", "y", "side"]].to_dict("index")
+            tick_df.set_index("steamid").loc[:, ["x", "y", "side"]].to_dict("index")
         )
 
         # Calculate distances between all pairs of players
@@ -134,7 +134,7 @@ def cluster_player_communities(
 
     result = tf_loc.reset_index().drop(["round_num"], axis=1).set_index("tick")
     for tick in all_ticks:
-        result.loc[tick, "c"] = result.loc[tick, "steam_id"].map(tick_partitions[tick])
+        result.loc[tick, "c"] = result.loc[tick, "steamid"].map(tick_partitions[tick])
 
     return result
 
@@ -146,16 +146,16 @@ def transform_to_cluster(df: pd.DataFrame) -> pd.DataFrame:
         .agg(
             x=("x", "mean"),
             y=("y", "mean"),
-            size=("steam_id", "count"),
+            size=("steamid", "count"),
             start=("tick", "mean"),
             end=("tick", "mean"),
         )
     )
 
-    result.loc[:, ["p1", "p2", "p3", "p4", "p5"]] = np.nan
+    result.loc[:, ["p1", "p2", "p3", "p4", "p5"]] = pd.NA
 
     for tick, side, c in result.index:
-        c_players = df[(df.index == tick) & (df.side == side) & (df.c == c)]["steam_id"]
+        c_players = df[(df.index == tick) & (df.side == side) & (df.c == c)]["steamid"]
         result.loc[(tick, side, c), [f"p{i}" for i in range(1, len(c_players) + 1)]] = (
             np.array(c_players)
         )
