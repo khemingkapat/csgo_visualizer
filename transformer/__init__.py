@@ -4,6 +4,7 @@ from .round_sum import get_round_sum
 from .player_stat import get_player_stat
 
 import pandas as pd
+import json
 
 
 class Transformer:
@@ -19,11 +20,11 @@ class Transformer:
     ) -> dict[str, pd.DataFrame | str]:
 
         result: dict[str, pd.DataFrame | str] = dict()
-        selected_map = dfs["matches"]["map_name"].iloc[0]
+        selected_map = dfs["other_data"]["map_name"].iloc[0]
         map_data = all_map_data[selected_map]
 
         # transforming player location from player_frames
-        result["player_locations"] = transform_coord(map_data, dfs["player_frames"])
+        result["player_locations"] = transform_coord(map_data, dfs["ticks"])
 
         # transforming flash data with both flash location and line
         if "flashes" in dfs and not dfs["flashes"].empty:
@@ -78,6 +79,30 @@ class Transformer:
             result["grenades"] = grenades
             result["grenade_lines"] = grenade_lines
 
+        if "smokes" in dfs and not dfs["smokes"].empty:
+            smoke_lines = transform_coords(
+                map_data, dfs["smokes"], ["thrower", "smoke"]
+            )
+            smokes = transform_action(
+                smoke_lines,
+                ["thrower", "smoke"],
+                common_extra_cols=["start_tick", "end_tick"],
+            )
+            result["smokes"] = smokes
+            result["smoke_lines"] = smoke_lines
+
+        if "infernos" in dfs and not dfs["infernos"].empty:
+            inferno_lines = transform_coords(
+                map_data, dfs["infernos"], ["thrower", "inferno"]
+            )
+            infernos = transform_action(
+                inferno_lines,
+                ["thrower", "inferno"],
+                common_extra_cols=["start_tick", "end_tick"],
+            )
+            result["infernos"] = infernos
+            result["inferno_lines"] = inferno_lines
+
         result["map"] = selected_map
         return result
 
@@ -91,14 +116,16 @@ class Transformer:
         if ("ct_kills" in round_sum) and ("t_kills" in round_sum):
             result_df[["ct_kills", "t_kills"]] = round_sum[["ct_kills", "t_kills"]]
 
-        if "round_end_reason" in round_sum:
-            result_df["round_end_reason"] = round_sum["round_end_reason"]
+        if "reason" in round_sum:
+            result_df["reason"] = round_sum["reason"]
         return result_df.reset_index()
 
     @staticmethod
     def transform_all_data(
-        dfs: dict[str, pd.DataFrame], all_map_data: dict[str, dict[str, int]]
+        dfs: dict[str, pd.DataFrame],
     ) -> dict[str, pd.DataFrame | str]:
+        with open(".awpy/maps/map-data.json", "r") as f:
+            all_map_data = json.load(f)
         act_loc_transformed_dfs = Transformer.transform_actions(dfs, all_map_data)
         round_sum = Transformer.get_round_sum(dfs)
         act_loc_transformed_dfs["rounds_sum"] = round_sum
