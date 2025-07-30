@@ -1,14 +1,12 @@
 import streamlit as st
 from parser import Parser
 from utils.components import (
-    upload_and_parse_json,
+    # upload_and_parse_json,
     upload_and_parse_demo,
-    load_sample_demo,
+    load_sample_demo_from_gdrive,
 )
 from preprocessor import Preprocessor
-import json
 from transformer import Transformer
-import os
 
 
 def home_page():
@@ -76,19 +74,16 @@ def home_page():
     st.markdown("---")
     st.subheader("🎮 Try with Our Sample Data")
     col1, col2, _ = st.columns([1, 1, 5])
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_dir)
-    sample_data_dir = os.path.join(project_root, "sample_data")
     with col1:
         if st.button("Austin Major : Vitality vs. The Mongolz-Dust2"):
-            uploaded_demo = load_sample_demo(
-                f"{sample_data_dir}/vitality-vs-the-mongolz-m2-dust2.dem"
+            uploaded_demo = load_sample_demo_from_gdrive(
+                "vitality-vs-the-mongolz-m2-dust2"
             )
 
     with col2:
         if st.button("Austin Major : Vitality vs. The Mongolz-Inferno"):
-            uploaded_demo = load_sample_demo(
-                f"{sample_data_dir}/vitality-vs-the-mongolz-m3-inferno.dem"
+            uploaded_demo = load_sample_demo_from_gdrive(
+                "vitality-vs-the-mongolz-m3-inferno"
             )
 
     if uploaded_demo is not None and uploaded_demo:
