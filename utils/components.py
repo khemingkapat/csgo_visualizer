@@ -5,6 +5,7 @@ import os
 import tempfile
 import requests
 from awpy import Demo
+import re
 
 
 def upload_and_parse_json(preview_limit=10) -> dict:
@@ -120,161 +121,118 @@ GOOGLE_DRIVE_FILES = {
 }
 
 
-def download_demo_file(file_id: str, local_path: str) -> bool:
+def download_demo_file(file_id: str, local_path: str) -> Optional[str]:
     """
-    Download a demo file from Google Drive.
-    Fixed for Streamlit Cloud compatibility.
+    Downloads a demo file from Google Drive and returns the absolute local path.
+    Works reliably on Streamlit Cloud by using a temp directory and handling Google Drive confirmation tokens.
     """
     try:
-        # Use temp directory instead of relative path for Streamlit Cloud
+        # Use temp directory if relative path
         if not os.path.isabs(local_path):
-            # Create temp directory
             temp_dir = tempfile.mkdtemp()
             local_path = os.path.join(temp_dir, os.path.basename(local_path))
 
-        # Ensure parent directory exists
-        parent_dir = os.path.dirname(local_path)
-        if parent_dir:
-            os.makedirs(parent_dir, exist_ok=True)
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
-        # Google Drive direct download URL
-        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        # Step 1: Try direct download
+        session = requests.Session()
+        base_url = "https://drive.google.com/uc?export=download"
+        download_url = f"{base_url}&id={file_id}"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
-        # Show download progress
-        with st.spinner(f"Downloading demo file from Google Drive..."):
-            session = requests.Session()
-
-            # Add headers to avoid bot detection
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }
+        with st.spinner("Downloading demo file from Google Drive..."):
             response = session.get(download_url, stream=True, headers=headers)
 
-            # Handle Google Drive's virus scan warning for large files
-            if (
-                response.status_code == 200
-                and "virus scan warning" in response.text.lower()
-            ):
-                # Look for the confirmation token
-                import re
+            # Step 2: If we hit a warning page, extract the confirmation token
+            def get_confirm_token(text):
+                match = re.search(r"confirm=([0-9A-Za-z_]+)", text)
+                return match.group(1) if match else None
 
-                confirm_pattern = r"confirm=([a-zA-Z0-9\-_]+)"
-                match = re.search(confirm_pattern, response.text)
-                if match:
-                    confirm_token = match.group(1)
-                    confirm_url = f"https://drive.google.com/uc?export=download&id={file_id}&confirm={confirm_token}"
-                    response = session.get(confirm_url, stream=True, headers=headers)
+            token = get_confirm_token(response.text)
+            if token:
+                confirm_url = f"{base_url}&id={file_id}&confirm={token}"
+                response = session.get(confirm_url, stream=True, headers=headers)
 
             response.raise_for_status()
 
-            # Get file size if available
+            # Step 3: Write the file to disk
             total_size = int(response.headers.get("content-length", 0))
-
             with open(local_path, "wb") as f:
                 if total_size > 0:
-                    # Show progress bar
                     progress_bar = st.progress(0)
                     downloaded = 0
-
-                    for chunk in response.iter_content(chunk_size=8192):
+                    for chunk in response.iter_content(8192):
                         if chunk:
                             f.write(chunk)
                             downloaded += len(chunk)
-                            progress = min(downloaded / total_size, 1.0)
-                            progress_bar.progress(progress)
-
+                            progress_bar.progress(min(downloaded / total_size, 1.0))
                     progress_bar.empty()
                 else:
-                    # No content length, just download
-                    for chunk in response.iter_content(chunk_size=8192):
+                    for chunk in response.iter_content(8192):
                         if chunk:
                             f.write(chunk)
 
-        # Verify file was written and has content
-        if not os.path.exists(local_path) or os.path.getsize(local_path) == 0:
-            raise Exception("Downloaded file is empty or doesn't exist")
+        # Step 4: Validate downloaded file
+        if not os.path.exists(local_path) or os.path.getsize(local_path) < 1024:
+            raise Exception("Downloaded file is too small or missing")
 
-        return True
+        # Optional: save copy for debugging (remove in prod)
+        # shutil.copy(local_path, "/tmp/debug_downloaded.dem")
+
+        return local_path
 
     except Exception as e:
-        st.error(f"❌ Failed to download demo file: {str(e)}")
-        # Clean up partial file
-        if os.path.exists(local_path):
-            try:
+        st.error(f"❌ Failed to download demo file: {e}")
+        try:
+            if os.path.exists(local_path):
                 os.unlink(local_path)
-            except:
-                pass
-        return False
+        except:
+            pass
+        return None
 
 
 def load_sample_demo_from_gdrive(
     demo_key: str, preview_limit: int = 10
 ) -> Optional[Demo]:
     """
-    Load a sample CS demo file from Google Drive.
-    Downloads the file if not cached locally, then loads it.
-
-    Args:
-        demo_key (str): Key to identify the demo in GOOGLE_DRIVE_FILES
-        demo_name (str): Display name for the demo
-        preview_limit (int): Number of items to preview in the UI
-
-    Returns:
-        awpy.Demo object if loaded successfully, else None
+    Downloads and parses a demo file from Google Drive using awpy.
+    Only creates a temp file for preview (not required for parsing).
     """
     try:
         if demo_key not in GOOGLE_DRIVE_FILES:
             st.error(f"❌ Unknown demo key: {demo_key}")
             return None
-        print("demo key found")
 
         demo_config = GOOGLE_DRIVE_FILES[demo_key]
-        local_cache_path = f"sample_data/{demo_config['filename']}"
+        filename = demo_config["filename"]
+        print(filename)
 
-        # Check if file exists locally (cached)
-        if not os.path.exists(local_cache_path):
-            if not download_demo_file(demo_config["file_id"], local_cache_path):
-                return None
-            st.success(f"✅ demo downloaded and cached!")
-        print("file downloaded")
-
-        # Now load the file using existing logic
-        with open(local_cache_path, "rb") as f:
-            file_data = f.read()
-
-        # Basic validation (same as upload function)
-        if len(file_data) < 1072:
-            st.error("❌ File too small to be a valid demo file")
+        # Step 1: Download the file
+        downloaded_path = download_demo_file(demo_config["file_id"], filename)
+        print(downloaded_path)
+        if not downloaded_path:
             return None
 
-        # Create temporary file for awpy (same approach as upload function)
-        with tempfile.NamedTemporaryFile(suffix=".dem", delete=False) as temp_file:
-            temp_file.write(file_data)
-            temp_path = temp_file.name
+        st.success("✅ Demo downloaded successfully!")
 
-        # Create Demo object
-        demo = Demo(temp_path)
+        # Step 2: (Optional) File validation
+        if os.path.getsize(downloaded_path) < 1072:
+            st.error("❌ File too small to be a valid demo file")
+            return None
+        print("file big enough")
+
+        # Step 3: Parse directly using awpy (or your Demo class)
+        demo = Demo(downloaded_path)  # ✅ Direct path — no extra temp file
         print("demo created")
 
-        # Clean up temporary file
-        os.unlink(temp_path)
+        st.success("✅ Demo file parsed successfully!")
 
-        # Store in session state
-
-        st.success("✅ Demo file loaded successfully!")
-
-        # Show preview only if preview_limit > 0
         if preview_limit > 0:
-            st.write(f"📊 Size: {len(file_data):,} bytes")
+            st.write(f"📄 Demo file: {filename}")
+            st.write(f"📊 Size: {os.path.getsize(downloaded_path):,} bytes")
 
         return demo
 
     except Exception as e:
         st.error(f"❌ Error loading demo file: {e}")
-        # Clean up temp file if it exists
-        if "temp_path" in locals():
-            try:
-                os.unlink(temp_path)
-            except:
-                pass
         return None
