@@ -3,3 +3,4 @@
 *.test.*
 
 *.dem
+.streamlit/secrets.toml
