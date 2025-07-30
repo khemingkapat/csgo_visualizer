@@ -3,9 +3,8 @@ import json
 from typing import Optional
 import os
 import tempfile
-import requests
 from awpy import Demo
-import re
+import gdown
 
 
 def upload_and_parse_json(preview_limit=10) -> dict:
@@ -108,131 +107,310 @@ def upload_and_parse_demo(preview_limit: int = 10) -> Optional[Demo]:
         return None
 
 
-# Configuration for Google Drive files
 GOOGLE_DRIVE_FILES = {
     "vitality-vs-the-mongolz-m2-dust2": {
-        "file_id": st.secrets["google_drive"]["m2"],  # Replace with actual file ID
+        "file_id": st.secrets["google_drive"]["m2"],
         "filename": "vitality-vs-the-mongolz-m2-dust2.dem",
     },
     "vitality-vs-the-mongolz-m3-inferno": {
-        "file_id": st.secrets["google_drive"]["m3"],  # Replace with actual file ID
+        "file_id": st.secrets["google_drive"]["m3"],
         "filename": "vitality-vs-the-mongolz-m3-inferno.dem",
     },
 }
 
 
-def download_demo_file(file_id: str, local_path: str) -> Optional[str]:
+def download_demo_file(file_id: str, filename: str) -> Optional[str]:
     """
-    Downloads a demo file from Google Drive and returns the absolute local path.
-    Works reliably on Streamlit Cloud by using a temp directory and handling Google Drive confirmation tokens.
+    Download a demo file from Google Drive using gdown.
+    This handles virus scan warnings automatically.
+
+    Args:
+        file_id (str): Google Drive file ID
+        filename (str): Original filename for reference
+
+    Returns:
+        str: Path to downloaded temporary file, or None if failed
     """
     try:
-        # Use temp directory if relative path
-        if not os.path.isabs(local_path):
-            temp_dir = tempfile.mkdtemp()
-            local_path = os.path.join(temp_dir, os.path.basename(local_path))
+        st.info(f"🔄 Downloading {filename} using gdown...")
 
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        # Validate file_id
+        if not file_id or len(file_id) < 10:
+            st.error(f"❌ Invalid Google Drive file ID: {file_id}")
+            return None
 
-        # Step 1: Try direct download
-        session = requests.Session()
-        base_url = "https://drive.google.com/uc?export=download"
-        download_url = f"{base_url}&id={file_id}"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        # Create temporary file with proper naming
+        temp_fd, temp_path = tempfile.mkstemp(suffix=".dem", prefix="demo_")
+        os.close(temp_fd)  # Close file descriptor but keep the file
 
-        with st.spinner("Downloading demo file from Google Drive..."):
-            response = session.get(download_url, stream=True, headers=headers)
+        # Set proper permissions
+        os.chmod(temp_path, 0o644)
 
-            # Step 2: If we hit a warning page, extract the confirmation token
-            def get_confirm_token(text):
-                match = re.search(r"confirm=([0-9A-Za-z_]+)", text)
-                return match.group(1) if match else None
+        st.write(f"📁 Temp file: {temp_path}")
+        st.write(f"🔗 File ID: {file_id}")
 
-            token = get_confirm_token(response.text)
-            if token:
-                confirm_url = f"{base_url}&id={file_id}&confirm={token}"
-                response = session.get(confirm_url, stream=True, headers=headers)
+        # Construct Google Drive URL
+        url = f"https://drive.google.com/uc?id={file_id}"
+        st.write(f"📡 Download URL: {url}")
 
-            response.raise_for_status()
+        # Use gdown to download with progress bar
+        try:
+            # Create a progress placeholder
+            progress_placeholder = st.empty()
+            status_placeholder = st.empty()
 
-            # Step 3: Write the file to disk
-            total_size = int(response.headers.get("content-length", 0))
-            with open(local_path, "wb") as f:
-                if total_size > 0:
-                    progress_bar = st.progress(0)
-                    downloaded = 0
-                    for chunk in response.iter_content(8192):
-                        if chunk:
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            progress_bar.progress(min(downloaded / total_size, 1.0))
-                    progress_bar.empty()
+            # Configure gdown options
+            # fuzzy=True helps with file ID extraction
+            # quiet=False shows progress (we'll capture it)
+            success = gdown.download(
+                url=url,
+                output=temp_path,
+                quiet=False,  # Show progress
+                fuzzy=True,  # Handle different URL formats
+            )
+
+            # Clear progress placeholders
+            progress_placeholder.empty()
+            status_placeholder.empty()
+
+            if not success:
+                st.error("❌ gdown reported download failure")
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+                return None
+
+        except Exception as gdown_error:
+            st.error(f"❌ gdown error: {gdown_error}")
+
+            # Try alternative gdown method
+            st.warning("🔄 Trying alternative gdown method...")
+            try:
+                # Sometimes the direct file ID works better
+                gdown.download(id=file_id, output=temp_path, quiet=False)
+
+            except Exception as alt_error:
+                st.error(f"❌ Alternative method also failed: {alt_error}")
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+                return None
+
+        # Verify the download
+        if not os.path.exists(temp_path):
+            st.error("❌ Downloaded file doesn't exist")
+            return None
+
+        file_size = os.path.getsize(temp_path)
+        st.write(f"📊 Downloaded size: {file_size:,} bytes")
+
+        # Validate file size
+        if file_size == 0:
+            st.error("❌ Downloaded file is empty")
+            os.unlink(temp_path)
+            return None
+
+        if file_size < 1072:
+            st.error(f"❌ File too small ({file_size} bytes) - likely not a valid demo")
+            os.unlink(temp_path)
+            return None
+
+        # Test file readability
+        try:
+            with open(temp_path, "rb") as test_file:
+                header = test_file.read(32)
+                st.write(f"🔍 File header: {header[:16].hex()}")
+
+                # Basic demo file validation (optional)
+                if header[:4] == b"HLVD":  # Half-Life/Source engine demo header
+                    st.success("✅ Valid Source engine demo file detected")
                 else:
-                    for chunk in response.iter_content(8192):
-                        if chunk:
-                            f.write(chunk)
+                    st.warning(
+                        "⚠️ Unusual file header - may not be a standard demo file"
+                    )
 
-        # Step 4: Validate downloaded file
-        if not os.path.exists(local_path) or os.path.getsize(local_path) < 1024:
-            raise Exception("Downloaded file is too small or missing")
+        except Exception as read_error:
+            st.error(f"❌ Cannot read downloaded file: {read_error}")
+            os.unlink(temp_path)
+            return None
 
-        # Optional: save copy for debugging (remove in prod)
-        # shutil.copy(local_path, "/tmp/debug_downloaded.dem")
+        st.success(f"✅ Download successful: {file_size:,} bytes")
+        return temp_path
 
-        return local_path
+    except ImportError:
+        st.error("❌ gdown library not installed")
+        st.error("💡 Add 'gdown>=4.6.0' to your requirements.txt file")
+        return None
 
     except Exception as e:
-        st.error(f"❌ Failed to download demo file: {e}")
-        try:
-            if os.path.exists(local_path):
-                os.unlink(local_path)
-        except:
-            pass
+        st.error(f"❌ Unexpected error: {e}")
+        if "temp_path" in locals() and os.path.exists(temp_path):
+            os.unlink(temp_path)
         return None
 
 
 def load_sample_demo_from_gdrive(
     demo_key: str, preview_limit: int = 10
-) -> Optional[Demo]:
+) -> Optional[object]:
     """
     Downloads and parses a demo file from Google Drive using awpy.
-    Only creates a temp file for preview (not required for parsing).
+    Includes comprehensive error handling and file validation.
     """
     try:
+        st.write(f"🎯 Loading demo: {demo_key}")
+
+        # Validate demo key
         if demo_key not in GOOGLE_DRIVE_FILES:
             st.error(f"❌ Unknown demo key: {demo_key}")
+            st.error(f"Available keys: {list(GOOGLE_DRIVE_FILES.keys())}")
             return None
 
         demo_config = GOOGLE_DRIVE_FILES[demo_key]
         filename = demo_config["filename"]
-        print(filename)
 
-        # Step 1: Download the file
-        downloaded_path = download_demo_file(demo_config["file_id"], filename)
-        print(downloaded_path)
+        st.write(f"📋 Loading: {filename}")
+        print(f"Loading demo: {filename}")
+
+        # Check session cache first
+        cache_key = f"demo_path_{demo_key}"
+        downloaded_path = None
+
+        if cache_key in st.session_state:
+            cached_path = st.session_state[cache_key]
+            if os.path.exists(cached_path) and os.path.getsize(cached_path) > 1072:
+                st.success("✅ Using cached demo file")
+                downloaded_path = cached_path
+            else:
+                st.warning("⚠️ Cache invalid, re-downloading...")
+                del st.session_state[cache_key]
+
+        # Download if not cached
         if not downloaded_path:
+            downloaded_path = download_demo_file(demo_config["file_id"], filename)
+
+            if not downloaded_path:
+                st.error("❌ Download failed")
+                return None
+
+            # Cache the successful download
+            st.session_state[cache_key] = downloaded_path
+            st.success("✅ Demo downloaded successfully!")
+
+        print(f"Downloaded path: {downloaded_path}")
+
+        # Additional file validation before Demo creation
+        if not os.path.exists(downloaded_path):
+            st.error(f"❌ File doesn't exist: {downloaded_path}")
             return None
 
-        st.success("✅ Demo downloaded successfully!")
-
-        # Step 2: (Optional) File validation
-        if os.path.getsize(downloaded_path) < 1072:
-            st.error("❌ File too small to be a valid demo file")
+        file_size = os.path.getsize(downloaded_path)
+        if file_size < 1072:
+            st.error(f"❌ File too small: {file_size} bytes")
             return None
-        print("file big enough")
 
-        # Step 3: Parse directly using awpy (or your Demo class)
-        demo = Demo(downloaded_path)  # ✅ Direct path — no extra temp file
-        print("demo created")
+        st.write(f"📊 File size: {file_size:,} bytes")
+        print(f"File size: {file_size} bytes")
 
-        st.success("✅ Demo file parsed successfully!")
+        # Test file accessibility
+        try:
+            with open(downloaded_path, "rb") as test_file:
+                header = test_file.read(32)
+                st.write(f"🔍 File header: {header[:16].hex()}")
+                print(f"File header: {header[:16].hex()}")
+        except Exception as read_error:
+            st.error(f"❌ Cannot read file: {read_error}")
+            return None
 
+        print("File validation passed, creating Demo object...")
+
+        # Create Demo object with error handling
+        try:
+            # Import your Demo class here
+            # from awpy import Demo
+
+            st.info("🔄 Creating Demo object...")
+
+            # For testing - replace this with your actual Demo import
+            demo = Demo(downloaded_path)
+
+            # Placeholder - replace with actual Demo creation
+
+            print("Demo object created successfully")
+            st.success("✅ Demo file parsed successfully!")
+
+        except Exception as demo_error:
+            st.error(f"❌ Error creating Demo object: {demo_error}")
+            st.error(f"Error type: {type(demo_error).__name__}")
+
+            # Show more details for debugging
+            import traceback
+
+            st.error("Full traceback:")
+            st.code(traceback.format_exc())
+
+            return None
+
+        # Show preview information
         if preview_limit > 0:
             st.write(f"📄 Demo file: {filename}")
-            st.write(f"📊 Size: {os.path.getsize(downloaded_path):,} bytes")
+            st.write(f"📊 Size: {file_size:,} bytes")
+            st.write(f"📁 Path: {downloaded_path}")
 
         return demo
 
     except Exception as e:
-        st.error(f"❌ Error loading demo file: {e}")
+        st.error(f"❌ Error in load_sample_demo_from_gdrive: {e}")
+
+        # Detailed error information
+        import traceback
+
+        st.error("Full error traceback:")
+        st.code(traceback.format_exc())
+
+        # Debug information
+        st.error("🔍 Debug Information:")
+        st.write(f"- Demo key: {demo_key}")
+        st.write(f"- Available keys: {list(GOOGLE_DRIVE_FILES.keys())}")
+
+        if demo_key in GOOGLE_DRIVE_FILES:
+            config = GOOGLE_DRIVE_FILES[demo_key]
+            st.write(f"- Filename: {config['filename']}")
+            st.write(
+                f"- File ID: {config['file_id'][:10]}..."
+                if config["file_id"]
+                else "None"
+            )
+
         return None
+
+
+# Utility functions
+def clear_demo_cache():
+    """Clear all cached demo files"""
+    cleared = 0
+    for key in list(st.session_state.keys()):
+        if key.startswith("demo_path_"):
+            file_path = st.session_state[key]
+            try:
+                if os.path.exists(file_path):
+                    os.unlink(file_path)
+                del st.session_state[key]
+                cleared += 1
+            except Exception as e:
+                st.error(f"Error clearing {key}: {e}")
+
+    st.success(f"✅ Cleared {cleared} cached files")
+
+
+def test_file_download(demo_key: str):
+    """Test just the download part without Demo creation"""
+    if demo_key not in GOOGLE_DRIVE_FILES:
+        st.error("Invalid demo key")
+        return
+
+    config = GOOGLE_DRIVE_FILES[demo_key]
+    downloaded_path = download_demo_file(config["file_id"], config["filename"])
+
+    if downloaded_path:
+        st.success(f"✅ Download test successful: {downloaded_path}")
+        st.write(f"File size: {os.path.getsize(downloaded_path):,} bytes")
+    else:
+        st.error("❌ Download test failed")
