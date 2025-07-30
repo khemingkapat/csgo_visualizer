@@ -42,10 +42,9 @@ def main():
         if st.sidebar.button("Upload New File", type="secondary"):
             # Clear session state and return to home
             st.session_state.page = "home"
-            st.session_state.json_data = None
+            st.session_state.demo_data = None
             st.session_state.clean_dfs = None
             st.session_state.transformed_data = None
-            st.session_state.visualization_updated = False
             st.rerun()
         # Run the selected page
         page.run()
