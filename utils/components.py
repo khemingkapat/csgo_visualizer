@@ -123,41 +123,47 @@ GOOGLE_DRIVE_FILES = {
 def download_demo_file(file_id: str, local_path: str) -> bool:
     """
     Download a demo file from Google Drive.
-
-    Args:
-        file_id (str): Google Drive file ID
-        local_path (str): Local path to save the file
-
-    Returns:
-        bool: True if download successful, False otherwise
+    Fixed for Streamlit Cloud compatibility.
     """
     try:
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        # Use temp directory instead of relative path for Streamlit Cloud
+        if not os.path.isabs(local_path):
+            # Create temp directory
+            temp_dir = tempfile.mkdtemp()
+            local_path = os.path.join(temp_dir, os.path.basename(local_path))
+
+        # Ensure parent directory exists
+        parent_dir = os.path.dirname(local_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
 
         # Google Drive direct download URL
         download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
 
         # Show download progress
         with st.spinner(f"Downloading demo file from Google Drive..."):
-            # First request to get the file
             session = requests.Session()
-            response = session.get(download_url, stream=True)
+
+            # Add headers to avoid bot detection
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+            response = session.get(download_url, stream=True, headers=headers)
 
             # Handle Google Drive's virus scan warning for large files
-            if "virus scan warning" in response.text.lower():
-                # Look for the confirmation link
-                for line in response.text.splitlines():
-                    if "confirm=" in line and "export=download" in line:
-                        # Extract the confirmation URL
-                        start = line.find('href="') + 6
-                        end = line.find('"', start)
-                        if start > 5 and end > start:
-                            confirm_url = line[start:end].replace("&amp;", "&")
-                            response = session.get(
-                                f"https://drive.google.com{confirm_url}", stream=True
-                            )
-                            break
+            if (
+                response.status_code == 200
+                and "virus scan warning" in response.text.lower()
+            ):
+                # Look for the confirmation token
+                import re
+
+                confirm_pattern = r"confirm=([a-zA-Z0-9\-_]+)"
+                match = re.search(confirm_pattern, response.text)
+                if match:
+                    confirm_token = match.group(1)
+                    confirm_url = f"https://drive.google.com/uc?export=download&id={file_id}&confirm={confirm_token}"
+                    response = session.get(confirm_url, stream=True, headers=headers)
 
             response.raise_for_status()
 
@@ -184,10 +190,20 @@ def download_demo_file(file_id: str, local_path: str) -> bool:
                         if chunk:
                             f.write(chunk)
 
+        # Verify file was written and has content
+        if not os.path.exists(local_path) or os.path.getsize(local_path) == 0:
+            raise Exception("Downloaded file is empty or doesn't exist")
+
         return True
 
     except Exception as e:
-        st.error(f"❌ Failed to download demo file: {e}")
+        st.error(f"❌ Failed to download demo file: {str(e)}")
+        # Clean up partial file
+        if os.path.exists(local_path):
+            try:
+                os.unlink(local_path)
+            except:
+                pass
         return False
 
 
@@ -210,6 +226,7 @@ def load_sample_demo_from_gdrive(
         if demo_key not in GOOGLE_DRIVE_FILES:
             st.error(f"❌ Unknown demo key: {demo_key}")
             return None
+        print("demo key found")
 
         demo_config = GOOGLE_DRIVE_FILES[demo_key]
         local_cache_path = f"sample_data/{demo_config['filename']}"
@@ -219,6 +236,7 @@ def load_sample_demo_from_gdrive(
             if not download_demo_file(demo_config["file_id"], local_cache_path):
                 return None
             st.success(f"✅ demo downloaded and cached!")
+        print("file downloaded")
 
         # Now load the file using existing logic
         with open(local_cache_path, "rb") as f:
@@ -236,6 +254,7 @@ def load_sample_demo_from_gdrive(
 
         # Create Demo object
         demo = Demo(temp_path)
+        print("demo created")
 
         # Clean up temporary file
         os.unlink(temp_path)
