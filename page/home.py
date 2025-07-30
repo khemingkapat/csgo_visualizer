@@ -4,8 +4,6 @@ from utils.components import (
     # upload_and_parse_json,
     upload_and_parse_demo,
     load_sample_demo_from_gdrive,
-    test_file_download,
-    clear_demo_cache,
 )
 from preprocessor import Preprocessor
 from transformer import Transformer
@@ -88,11 +86,6 @@ def home_page():
                 "vitality-vs-the-mongolz-m3-inferno"
             )
 
-    if st.button("Test Download Only"):
-        test_file_download("vitality-vs-the-mongolz-m3-inferno")
-
-    if st.button("Clear Cache"):
-        clear_demo_cache()
     if uploaded_demo is not None and uploaded_demo:
         st.session_state.demo_data = uploaded_demo
         with st.spinner("Processing data... This may take a moment."):
