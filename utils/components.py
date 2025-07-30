@@ -1,7 +1,10 @@
 import streamlit as st
 import json
-import struct
-from typing import Dict, Any, Optional
+from typing import Optional
+import os
+import tempfile
+import requests
+from awpy import Demo
 
 
 def upload_and_parse_json(preview_limit=10) -> dict:
@@ -47,13 +50,6 @@ def upload_and_parse_json(preview_limit=10) -> dict:
     else:
         st.info("📂 Please upload a JSON file.")
         return {}
-
-
-import streamlit as st
-import tempfile
-import os
-from awpy import Demo
-from typing import Optional
 
 
 def upload_and_parse_demo(preview_limit: int = 10) -> Optional[Demo]:
@@ -111,27 +107,121 @@ def upload_and_parse_demo(preview_limit: int = 10) -> Optional[Demo]:
         return None
 
 
-def load_sample_demo(file_path: str, preview_limit: int = 10) -> Optional[Demo]:
+# Configuration for Google Drive files
+GOOGLE_DRIVE_FILES = {
+    "vitality-vs-the-mongolz-m2-dust2": {
+        "file_id": st.secrets["google_drive"]["m2"],  # Replace with actual file ID
+        "filename": "vitality-vs-the-mongolz-m2-dust2.dem",
+    },
+    "vitality-vs-the-mongolz-m3-inferno": {
+        "file_id": st.secrets["google_drive"]["m3"],  # Replace with actual file ID
+        "filename": "vitality-vs-the-mongolz-m3-inferno.dem",
+    },
+}
+
+
+def download_demo_file(file_id: str, local_path: str) -> bool:
     """
-    Load a sample CS demo file (.dem) from a file path and return awpy Demo object.
-    Follows the same logic as upload_and_parse_demo but reads from local file.
+    Download a demo file from Google Drive.
 
     Args:
-        file_path (str): Path to the demo file
-        demo_name (str): Display name for the demo
-        preview_limit (int): Number of items to preview in the UI.
-                             If 0, no preview is shown.
+        file_id (str): Google Drive file ID
+        local_path (str): Local path to save the file
+
     Returns:
-        awpy.Demo object if loaded successfully, else None.
+        bool: True if download successful, False otherwise
     """
     try:
-        # Check if file exists
-        if not os.path.exists(file_path):
-            st.error(f"❌ Sample file not found: {file_path}")
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+        # Google Drive direct download URL
+        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+
+        # Show download progress
+        with st.spinner(f"Downloading demo file from Google Drive..."):
+            # First request to get the file
+            session = requests.Session()
+            response = session.get(download_url, stream=True)
+
+            # Handle Google Drive's virus scan warning for large files
+            if "virus scan warning" in response.text.lower():
+                # Look for the confirmation link
+                for line in response.text.splitlines():
+                    if "confirm=" in line and "export=download" in line:
+                        # Extract the confirmation URL
+                        start = line.find('href="') + 6
+                        end = line.find('"', start)
+                        if start > 5 and end > start:
+                            confirm_url = line[start:end].replace("&amp;", "&")
+                            response = session.get(
+                                f"https://drive.google.com{confirm_url}", stream=True
+                            )
+                            break
+
+            response.raise_for_status()
+
+            # Get file size if available
+            total_size = int(response.headers.get("content-length", 0))
+
+            with open(local_path, "wb") as f:
+                if total_size > 0:
+                    # Show progress bar
+                    progress_bar = st.progress(0)
+                    downloaded = 0
+
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            progress = min(downloaded / total_size, 1.0)
+                            progress_bar.progress(progress)
+
+                    progress_bar.empty()
+                else:
+                    # No content length, just download
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+
+        return True
+
+    except Exception as e:
+        st.error(f"❌ Failed to download demo file: {e}")
+        return False
+
+
+def load_sample_demo_from_gdrive(
+    demo_key: str, preview_limit: int = 10
+) -> Optional[Demo]:
+    """
+    Load a sample CS demo file from Google Drive.
+    Downloads the file if not cached locally, then loads it.
+
+    Args:
+        demo_key (str): Key to identify the demo in GOOGLE_DRIVE_FILES
+        demo_name (str): Display name for the demo
+        preview_limit (int): Number of items to preview in the UI
+
+    Returns:
+        awpy.Demo object if loaded successfully, else None
+    """
+    try:
+        if demo_key not in GOOGLE_DRIVE_FILES:
+            st.error(f"❌ Unknown demo key: {demo_key}")
             return None
 
-        # Read the file data
-        with open(file_path, "rb") as f:
+        demo_config = GOOGLE_DRIVE_FILES[demo_key]
+        local_cache_path = f"sample_data/{demo_config['filename']}"
+
+        # Check if file exists locally (cached)
+        if not os.path.exists(local_cache_path):
+            if not download_demo_file(demo_config["file_id"], local_cache_path):
+                return None
+            st.success(f"✅ demo downloaded and cached!")
+
+        # Now load the file using existing logic
+        with open(local_cache_path, "rb") as f:
             file_data = f.read()
 
         # Basic validation (same as upload function)
@@ -150,9 +240,11 @@ def load_sample_demo(file_path: str, preview_limit: int = 10) -> Optional[Demo]:
         # Clean up temporary file
         os.unlink(temp_path)
 
+        # Store in session state
+
         st.success("✅ Demo file loaded successfully!")
 
-        # Show preview only if preview_limit > 0 (same as upload function)
+        # Show preview only if preview_limit > 0
         if preview_limit > 0:
             st.write(f"📊 Size: {len(file_data):,} bytes")
 
@@ -160,7 +252,7 @@ def load_sample_demo(file_path: str, preview_limit: int = 10) -> Optional[Demo]:
 
     except Exception as e:
         st.error(f"❌ Error loading demo file: {e}")
-        # Clean up temp file if it exists (same error handling as upload function)
+        # Clean up temp file if it exists
         if "temp_path" in locals():
             try:
                 os.unlink(temp_path)
